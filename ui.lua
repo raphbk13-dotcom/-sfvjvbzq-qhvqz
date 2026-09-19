@@ -212,8 +212,8 @@ menu = { -- this is for menu stuffs n shi
 	fadestart = 0,
 	fading = false,
 	mousedown = false,
-    mouseOffsetY = 36,
-	cursorOffsetY = 0,
+	mouseScreenX = 0,
+	mouseScreenY = 0,
 	postable = {},
 	options = {},
 	clrs = {
@@ -2465,14 +2465,14 @@ function menu.Initialize(menutable)
 		bbmouse
 	)
 	local lastMousePos = Vector2.new()
-		function menu:set_mouse_pos(x, y)
+			function menu:set_mouse_pos(x, y)
 		FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
-		local oy = menu.cursorOffsetY or 0
+		local loc = game:GetService("UserInputService"):GetMouseLocation()
 		for k = 1, #bbmouse do
 			local v = bbmouse[k]
-			v.PointA = Vector2.new(x, y + oy)
-			v.PointB = Vector2.new(x, y + oy + 15)
-			v.PointC = Vector2.new(x + 10, y + oy + 10)
+			v.PointA = Vector2.new(loc.X, loc.Y)
+			v.PointB = Vector2.new(loc.X, loc.Y + 15)
+			v.PointC = Vector2.new(loc.X + 10, loc.Y + 10)
 		end
 		lastMousePos = Vector2.new(x, y)
 	end
@@ -2720,17 +2720,18 @@ function menu.Initialize(menutable)
 		end
 	end
 
-		function menu:MouseInArea(x, y, width, height)
-		return LOCAL_MOUSE.x > x and LOCAL_MOUSE.x < x + width and LOCAL_MOUSE.y > menu.mouseOffsetY + y and LOCAL_MOUSE.y < menu.mouseOffsetY + y + height
+	function menu:MouseInArea(x, y, width, height)
+		return menu.mouseScreenX > x and menu.mouseScreenX < x + width and menu.mouseScreenY > y and menu.mouseScreenY < y + height
 	end
 
 	function menu:MouseInMenu(x, y, width, height)
-		return LOCAL_MOUSE.x > menu.x + x and LOCAL_MOUSE.x < menu.x + x + width and LOCAL_MOUSE.y > menu.y - menu.mouseOffsetY + y and LOCAL_MOUSE.y < menu.y - menu.mouseOffsetY + y + height
+		return menu.mouseScreenX > menu.x + x and menu.mouseScreenX < menu.x + x + width and menu.mouseScreenY > menu.y + y and menu.mouseScreenY < menu.y + y + height
 	end
 
 	function menu:MouseInColorPicker(x, y, width, height)
-		return LOCAL_MOUSE.x > cp.x + x and LOCAL_MOUSE.x < cp.x + x + width and LOCAL_MOUSE.y > cp.y - menu.mouseOffsetY + y and LOCAL_MOUSE.y < cp.y - menu.mouseOffsetY + y + height
+		return menu.mouseScreenX > cp.x + x and menu.mouseScreenX < cp.x + x + width and menu.mouseScreenY > cp.y + y and menu.mouseScreenY < cp.y + y + height
 	end
+		
 
 	local keyz = {}
 	for k, v in pairs(Enum.KeyCode:GetEnumItems()) do
@@ -3680,7 +3681,7 @@ function menu.Initialize(menutable)
 														v2[5],
 														true,
 														v2[5][6],
-														LOCAL_MOUSE.x,
+														menu.mouseScreenX,
 														LOCAL_MOUSE.y + menu.mouseOffsetY
 													)
 												else
@@ -3690,7 +3691,7 @@ function menu.Initialize(menutable)
 														v2[5],
 														false,
 														v2[5][6],
-														LOCAL_MOUSE.x,
+														menu.mouseScreenX,
 														LOCAL_MOUSE.y + menu.mouseOffsetY
 													)
 												end
@@ -3708,7 +3709,7 @@ function menu.Initialize(menutable)
 															v3,
 															true,
 															v3[6],
-															LOCAL_MOUSE.x,
+															menu.mouseScreenX,
 															LOCAL_MOUSE.y + menu.mouseOffsetY
 														)
 													else
@@ -3718,7 +3719,7 @@ function menu.Initialize(menutable)
 															v3,
 															false,
 															v3[6],
-															LOCAL_MOUSE.x,
+															menu.mouseScreenX,
 															LOCAL_MOUSE.y + menu.mouseOffsetY
 														)
 													end
@@ -4171,7 +4172,12 @@ function menu.Initialize(menutable)
 				end
 			end
 		end
-		menu:set_mouse_pos(LOCAL_MOUSE.x, LOCAL_MOUSE.y)
+		do
+	local loc = INPUT_SERVICE:GetMouseLocation()
+	menu.mouseScreenX = loc.X
+	menu.mouseScreenY = loc.Y
+end
+menu:set_mouse_pos(menu.mouseScreenX, menu.mouseScreenY)
 		set_tooltip(nil, nil, nil, false, fdt)
 		if menu.open or menu.fading then
 			set_plusminus(0, 20, 20)
@@ -4212,7 +4218,7 @@ function menu.Initialize(menutable)
 									if v2[5] then
 										local new_val = (v2[6][2] - v2[6][1])  * (
 												(
-													LOCAL_MOUSE.x
+													menu.mouseScreenX
 													- menu.x
 													- v2[3][1]
 												) / v2[3][3]
@@ -4320,11 +4326,11 @@ function menu.Initialize(menutable)
 					end
 				end
 			end
-			menu.inmenu = LOCAL_MOUSE.x > menu.x and LOCAL_MOUSE.x < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y + menu.h
-			menu.inmiddlemenu = LOCAL_MOUSE.x > menu.x + 9 and LOCAL_MOUSE.x < menu.x + menu.w - 9 and LOCAL_MOUSE.y > menu.y - 9 and LOCAL_MOUSE.y < menu.y + menu.h - 47
+			menu.inmenu = menu.mouseScreenX > menu.x and menu.mouseScreenX < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y + menu.h
+			menu.inmiddlemenu = menu.mouseScreenX > menu.x + 9 and menu.mouseScreenX < menu.x + menu.w - 9 and LOCAL_MOUSE.y > menu.y - 9 and LOCAL_MOUSE.y < menu.y + menu.h - 47
 			if (
 					--[[(
-						LOCAL_MOUSE.x > menu.x and LOCAL_MOUSE.x < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y - 11
+						menu.mouseScreenX > menu.x and menu.mouseScreenX < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y - 11
 					)]]
 					(
 						menu.inmenu and 
@@ -4334,11 +4340,11 @@ function menu.Initialize(menutable)
 			then
 				if menu.mousedown then
 					if not menu.dragging then
-						clickspot_x = LOCAL_MOUSE.x
+						clickspot_x = menu.mouseScreenX
 						clickspot_y = LOCAL_MOUSE.y - 36 original_menu_X = menu.x original_menu_y = menu.y
 						menu.dragging = true
 					end
-					menu.x = (original_menu_X - clickspot_x) + LOCAL_MOUSE.x
+					menu.x = (original_menu_X - clickspot_x) + menu.mouseScreenX
 					menu.y = (original_menu_y - clickspot_y) + LOCAL_MOUSE.y - 36
 					if menu.y < 0 then
 						menu.y = 0
@@ -4364,11 +4370,11 @@ function menu.Initialize(menutable)
 			if menu.colorpicker_open then
 				if cp.dragging_m then
 					set_dragbar_m(
-						clamp(LOCAL_MOUSE.x, cp.x + 12, cp.x + 167) - 2,
+						clamp(menu.mouseScreenX, cp.x + 12, cp.x + 167) - 2,
 						clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 25, cp.y + 180) - 2
 					)
 
-					cp.hsv.s = (clamp(LOCAL_MOUSE.x, cp.x + 12, cp.x + 167) - cp.x - 12) / 155
+					cp.hsv.s = (clamp(menu.mouseScreenX, cp.x + 12, cp.x + 167) - cp.x - 12) / 155
 					cp.hsv.v = 1 - ((clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
 					newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
 				elseif cp.dragging_r then
@@ -4383,9 +4389,9 @@ function menu.Initialize(menutable)
 					cp.hsv.h = 1 - ((clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
 					newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
 				elseif cp.dragging_b then
-					set_dragbar_b(clamp(LOCAL_MOUSE.x, cp.x + 10, cp.x + 168), cp.y + 188)
-					newcolor.Transparency = (clamp(LOCAL_MOUSE.x, cp.x + 10, cp.x + 168) - cp.x - 10) / 158
-					cp.hsv.a = math.floor(((clamp(LOCAL_MOUSE.x, cp.x + 10, cp.x + 168) - cp.x - 10) / 158) * 255)
+					set_dragbar_b(clamp(menu.mouseScreenX, cp.x + 10, cp.x + 168), cp.y + 188)
+					newcolor.Transparency = (clamp(menu.mouseScreenX, cp.x + 10, cp.x + 168) - cp.x - 10) / 158
+					cp.hsv.a = math.floor(((clamp(menu.mouseScreenX, cp.x + 10, cp.x + 168) - cp.x - 10) / 158) * 255)
 				else
 					local setvisnew = menu:MouseInColorPicker(197, 37, 75, 40)
 					for i, v in ipairs(newcopy) do
