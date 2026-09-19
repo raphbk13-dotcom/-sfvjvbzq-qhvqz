@@ -843,50 +843,50 @@ function Groupbox:AddLabel(t, w) return Elements.Label(self, t, w) end
 function Groupbox:AddDivider() return Elements.Divider(self) end
 
 function Groupbox:AddDependencyBox()
+    local parent = self
     local Depbox = {}
-    Depbox._parent = self
-    Depbox._conditions = {}
 
-    -- __index : tout ce qui n'existe pas sur Depbox est lu depuis le Groupbox parent
-    setmetatable(Depbox, {
-        __index = function(t, k)
-            local p = rawget(t, "_parent")
-            if p then
-                if k == "_x" then return p._x end
-                if k == "_y" then return p._y end
-                if k == "_width" then return p._width end
-                if k == "_optionsY" then return p._optionsY end
-            end
-            return nil
-        end,
-    })
+    -- 🔑 Copie directe des propriétés du parent (fix du nil + number)
+    Depbox._parent = parent
+    Depbox._conditions = {}
+    Depbox._x = parent._x
+    Depbox._y = parent._y
+    Depbox._width = parent._width
+    Depbox._bodySize = parent._bodySize
+    Depbox._visIfRoot = parent._visIfRoot
 
     function Depbox:_visIf()
-        for _, cond in ipairs(self._conditions) do
+        for _, cond in ipairs(Depbox._conditions) do
             local tgl, want = cond[1], cond[2]
             if tgl.Value ~= want then return false end
         end
-        return self._parent:_visIf()
+        return parent:_visIf()
     end
 
     function Depbox:_nextY()
-        return self._parent:_nextY()
+        return parent:_nextY()
     end
 
     function Depbox:_pushOption(idx, obj, y, h)
-        return self._parent:_pushOption(idx, obj, y, h)
+        h = h or 22
+        parent._optionsY = parent._optionsY + h
+        parent._bodySize = parent._optionsY + 6
+        parent._body.Size = Vector2.new(parent._width, parent._bodySize - 22)
+        if idx and obj then
+            table.insert(parent._optList, { idx = idx, obj = obj })
+        end
     end
 
-    function Depbox:AddToggle(idx, opts)   return Elements.Toggle(self, idx, opts) end
-    function Depbox:AddSlider(idx, opts)   return Elements.Slider(self, idx, opts) end
-    function Depbox:AddDropdown(idx, opts) return Elements.Dropdown(self, idx, opts) end
-    function Depbox:AddInput(idx, opts)    return Elements.Input(self, idx, opts) end
-    function Depbox:AddButton(a, b)        return Elements.Button(self, a, b) end
-    function Depbox:AddLabel(t, w)         return Elements.Label(self, t, w) end
-    function Depbox:AddDivider()           return Elements.Divider(self) end
+    function Depbox:AddToggle(idx, opts)   return Elements.Toggle(Depbox, idx, opts)   end
+    function Depbox:AddSlider(idx, opts)   return Elements.Slider(Depbox, idx, opts)   end
+    function Depbox:AddDropdown(idx, opts) return Elements.Dropdown(Depbox, idx, opts) end
+    function Depbox:AddInput(idx, opts)    return Elements.Input(Depbox, idx, opts)    end
+    function Depbox:AddButton(a, b)        return Elements.Button(Depbox, a, b)        end
+    function Depbox:AddLabel(t, w)         return Elements.Label(Depbox, t, w)         end
+    function Depbox:AddDivider()           return Elements.Divider(Depbox)             end
 
     function Depbox:SetupDependencies(deps)
-        self._conditions = deps or {}
+        Depbox._conditions = deps or {}
     end
 
     return Depbox
