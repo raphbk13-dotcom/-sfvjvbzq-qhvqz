@@ -2464,15 +2464,18 @@ function menu.Initialize(menutable)
 	)
 	local lastMousePos = Vector2.new()
 	function menu:set_mouse_pos(x, y)
-		FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
-		for k = 1, #bbmouse do
-			local v = bbmouse[k]
-			v.PointA = Vector2.new(x, y + 36)
-			v.PointB = Vector2.new(x, y + 36 + 15)
-			v.PointC = Vector2.new(x + 10, y + 46)
-		end
-		lastMousePos = Vector2.new(x, y)
+	FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
+	local inset = game:GetService("GuiService"):GetGuiInset()
+	local fx = x + inset.X
+	local fy = y + inset.Y
+	for k = 1, #bbmouse do
+		local v = bbmouse[k]
+		v.PointA = Vector2.new(fx, fy)
+		v.PointB = Vector2.new(fx, fy + 15)
+		v.PointC = Vector2.new(fx + 10, fy + 10)
 	end
+	lastMousePos = Vector2.new(x, y)
+end
 
 	function menu:set_menu_clr(r, g, b)
 		menu.watermark.rect[1].Color = RGB(r - 40, g - 40, b - 40)
