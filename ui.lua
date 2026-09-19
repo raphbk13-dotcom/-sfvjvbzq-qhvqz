@@ -212,6 +212,7 @@ menu = { -- this is for menu stuffs n shi
 	fadestart = 0,
 	fading = false,
 	mousedown = false,
+    mouseOffsetY = 36,
 	postable = {},
 	options = {},
 	clrs = {
@@ -2464,18 +2465,16 @@ function menu.Initialize(menutable)
 	)
 	local lastMousePos = Vector2.new()
 	function menu:set_mouse_pos(x, y)
-	FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
-	local inset = game:GetService("GuiService"):GetGuiInset()
-	local fx = x + inset.X
-	local fy = y + inset.Y
-	for k = 1, #bbmouse do
-		local v = bbmouse[k]
-		v.PointA = Vector2.new(fx, fy)
-		v.PointB = Vector2.new(fx, fy + 15)
-		v.PointC = Vector2.new(fx + 10, fy + 10)
+		FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
+		local oy = menu.mouseOffsetY
+		for k = 1, #bbmouse do
+			local v = bbmouse[k]
+			v.PointA = Vector2.new(x, y + oy)
+			v.PointB = Vector2.new(x, y + oy + 15)
+			v.PointC = Vector2.new(x + 10, y + oy + 10)
+		end
+		lastMousePos = Vector2.new(x, y)
 	end
-	lastMousePos = Vector2.new(x, y)
-end
 
 	function menu:set_menu_clr(r, g, b)
 		menu.watermark.rect[1].Color = RGB(r - 40, g - 40, b - 40)
@@ -2720,16 +2719,16 @@ end
 		end
 	end
 
-	function menu:MouseInArea(x, y, width, height)
-		return LOCAL_MOUSE.x > x and LOCAL_MOUSE.x < x + width and LOCAL_MOUSE.y > 36 + y and LOCAL_MOUSE.y < 36 + y + height
+		function menu:MouseInArea(x, y, width, height)
+		return LOCAL_MOUSE.x > x and LOCAL_MOUSE.x < x + width and LOCAL_MOUSE.y > menu.mouseOffsetY + y and LOCAL_MOUSE.y < menu.mouseOffsetY + y + height
 	end
 
 	function menu:MouseInMenu(x, y, width, height)
-		return LOCAL_MOUSE.x > menu.x + x and LOCAL_MOUSE.x < menu.x + x + width and LOCAL_MOUSE.y > menu.y - 36 + y and LOCAL_MOUSE.y < menu.y - 36 + y + height
+		return LOCAL_MOUSE.x > menu.x + x and LOCAL_MOUSE.x < menu.x + x + width and LOCAL_MOUSE.y > menu.y - menu.mouseOffsetY + y and LOCAL_MOUSE.y < menu.y - menu.mouseOffsetY + y + height
 	end
 
 	function menu:MouseInColorPicker(x, y, width, height)
-		return LOCAL_MOUSE.x > cp.x + x and LOCAL_MOUSE.x < cp.x + x + width and LOCAL_MOUSE.y > cp.y - 36 + y and LOCAL_MOUSE.y < cp.y - 36 + y + height
+		return LOCAL_MOUSE.x > cp.x + x and LOCAL_MOUSE.x < cp.x + x + width and LOCAL_MOUSE.y > cp.y - menu.mouseOffsetY + y and LOCAL_MOUSE.y < cp.y - menu.mouseOffsetY + y + height
 	end
 
 	local keyz = {}
@@ -3681,7 +3680,7 @@ end
 														true,
 														v2[5][6],
 														LOCAL_MOUSE.x,
-														LOCAL_MOUSE.y + 36
+														LOCAL_MOUSE.y + menu.mouseOffsetY
 													)
 												else
 													set_colorpicker(
@@ -3691,7 +3690,7 @@ end
 														false,
 														v2[5][6],
 														LOCAL_MOUSE.x,
-														LOCAL_MOUSE.y + 36
+														LOCAL_MOUSE.y + menu.mouseOffsetY
 													)
 												end
 											end
@@ -3709,7 +3708,7 @@ end
 															true,
 															v3[6],
 															LOCAL_MOUSE.x,
-															LOCAL_MOUSE.y + 36
+															LOCAL_MOUSE.y + menu.mouseOffsetY
 														)
 													else
 														set_colorpicker(
@@ -3719,7 +3718,7 @@ end
 															false,
 															v3[6],
 															LOCAL_MOUSE.x,
-															LOCAL_MOUSE.y + 36
+															LOCAL_MOUSE.y + menu.mouseOffsetY
 														)
 													end
 												end
@@ -4365,22 +4364,22 @@ end
 				if cp.dragging_m then
 					set_dragbar_m(
 						clamp(LOCAL_MOUSE.x, cp.x + 12, cp.x + 167) - 2,
-						clamp(LOCAL_MOUSE.y + 36, cp.y + 25, cp.y + 180) - 2
+						clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 25, cp.y + 180) - 2
 					)
 
 					cp.hsv.s = (clamp(LOCAL_MOUSE.x, cp.x + 12, cp.x + 167) - cp.x - 12) / 155
-					cp.hsv.v = 1 - ((clamp(LOCAL_MOUSE.y + 36, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
+					cp.hsv.v = 1 - ((clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
 					newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
 				elseif cp.dragging_r then
-					set_dragbar_r(cp.x + 175, clamp(LOCAL_MOUSE.y + 36, cp.y + 23, cp.y + 178))
+					set_dragbar_r(cp.x + 175, clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178))
 
 					maincolor.Color = Color3.fromHSV(
-							1 - ((clamp(LOCAL_MOUSE.y + 36, cp.y + 23, cp.y + 178) - cp.y - 23) / 155),
+							1 - ((clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178) - cp.y - 23) / 155),
 							1,
 							1
 						)
 
-					cp.hsv.h = 1 - ((clamp(LOCAL_MOUSE.y + 36, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
+					cp.hsv.h = 1 - ((clamp(LOCAL_MOUSE.y + menu.mouseOffsetY, cp.y + 23, cp.y + 178) - cp.y - 23) / 155)
 					newcolor.Color = Color3.fromHSV(cp.hsv.h, cp.hsv.s, cp.hsv.v)
 				elseif cp.dragging_b then
 					set_dragbar_b(clamp(LOCAL_MOUSE.x, cp.x + 10, cp.x + 168), cp.y + 188)
