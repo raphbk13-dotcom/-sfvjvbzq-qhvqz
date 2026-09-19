@@ -4109,9 +4109,9 @@ function menu.Initialize(menutable)
 			setfpscap(menu.windowactive and (maxfps or 144) or 15)
 		end
 
-		menu.lastActive = menu.windowactive
+				menu.lastActive = menu.windowactive
 		for button, time in next, buttonsInQue do
-			if time and tick() - time doubleclickDelay then
+			if time and tick() - time < doubleclickDelay then     -- ← CETTE LIGNE
 				button[4].text.Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
 				button[4].text.Text = "Confirm?"
 			else
