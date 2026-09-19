@@ -4092,6 +4092,12 @@ function menu.Initialize(menutable)
 			return
 		end
 		SCREEN_SIZE = Camera.ViewportSize
+		if menu.open or menu.fading then
+			INPUT_SERVICE.MouseIconEnabled = false
+		else
+			INPUT_SERVICE.MouseIconEnabled = true
+		end
+		
 		-- i pasted the old menu working ingame shit from the old source nate pls fix ty
 		-- this is the really shitty alive check that we've been using since day one
 		-- removed it :DDD
@@ -6510,7 +6516,7 @@ menu.Initialize({
 
 do
 	local wm = menu.watermark
-	wm.textString = " | " .. "user" .. " | " .. os.date("%b. %d, %Y")
+	wm.textString = " | " .. Players.LocalPlayer.Name .. " | " .. os.date("%b. %d, %Y")
 	wm.pos = Vector2.new(50, 9)
 	wm.text = {}
 	local fulltext = menu.options["Settings"]["Cheat Settings"]["MenuName"][1] .. wm.textString
