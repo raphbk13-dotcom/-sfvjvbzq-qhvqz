@@ -4111,7 +4111,7 @@ function menu.Initialize(menutable)
 
 		menu.lastActive = menu.windowactive
 		for button, time in next, buttonsInQue do
-			if time and tick() - time < doubleclickDelay then
+			if time and tick() - time doubleclickDelay then
 				button[4].text.Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
 				button[4].text.Text = "Confirm?"
 			else
@@ -4119,7 +4119,9 @@ function menu.Initialize(menutable)
 				button[4].text.Text = button.name
 			end
 		end
-        INPUT_SERVICE.MouseBehavior = menu.open and Enum.MouseBehavior.Default or Enum.MouseBehavior.LockCenter
+        if menu.open or menu.fading then
+	INPUT_SERVICE.MouseBehavior = Enum.MouseBehavior.Default
+end
         --[[ if menu.open then
 			if client.char.alive then
 				INPUT_SERVICE.MouseBehavior = Enum.MouseBehavior.Default
