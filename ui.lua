@@ -42,10 +42,11 @@ end)
 -- ============================================================
 local ALL_DRAWINGS = {}
 
+local DRAWING_META_INIT = setmetatable({}, { __mode = "k" })
+
 local function reg(d, visibleIf)
+    DRAWING_META_INIT[d] = { visibleIf = visibleIf or function() return true end }
     d.Visible = true
-    d._visibleIf = visibleIf or function() return true end
-    d._explicitlyHidden = false
     table.insert(ALL_DRAWINGS, d)
     return d
 end
@@ -92,13 +93,17 @@ local function cleanupDrawings()
 end
 
 -- Global render loop : updates visibility on all drawings
+-- Métadonnées stockées dans une table séparée (les Drawing objects n'acceptent pas de props custom)
+local DRAWING_META = setmetatable({}, { __mode = "k" })
+
 local renderLoop = RunService.RenderStepped:Connect(function()
     for _, d in ipairs(ALL_DRAWINGS) do
-        if d._explicitlyHidden then
-            d.Visible = false
+        local meta = DRAWING_META[d]
+        if meta and meta.visibleIf then
+            local ok, v = pcall(meta.visibleIf)
+            d.Visible = ok and v == true
         else
-            local ok, v = pcall(d._visibleIf)
-            d.Visible = ok and v or false
+            d.Visible = true
         end
     end
 end)
@@ -928,8 +933,16 @@ function Library:CreateWindow(opts)
     self.Title  = opts.Title or "Library"
     self.Width  = opts.Width or 500
     self.Height = opts.Height or 600
-    self.X      = math.floor((SCREEN.X - self.Width) / 2)
-    self.Y      = math.floor((SCREEN.Y - self.Height) / 2)
+
+    --  Récupère la taille RÉELLE de l'écran (pas la valeur en cache)
+    local realScreen = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+    if realScreen.X < 100 or realScreen.Y < 100 then
+        realScreen = Vector2.new(1920, 1080)  -- fallback si vraiment 0
+    end
+
+    self.X = math.floor((realScreen.X - self.Width) / 2)
+    self.Y = math.floor((realScreen.Y - self.Height) / 2)
+    self._screenSize = realScreen
     self.Tabs   = {}
     self.ActiveTab = 1
     self.Open   = opts.AutoShow ~= false
