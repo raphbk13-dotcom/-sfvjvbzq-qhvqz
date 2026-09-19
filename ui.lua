@@ -4332,26 +4332,19 @@ menu:set_mouse_pos(menu.mouseScreenX, menu.mouseScreenY)
 					end
 				end
 			end
-			menu.inmenu = menu.mouseScreenX > menu.x and menu.mouseScreenX < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y + menu.h
-			menu.inmiddlemenu = menu.mouseScreenX > menu.x + 9 and menu.mouseScreenX < menu.x + menu.w - 9 and LOCAL_MOUSE.y > menu.y - 9 and LOCAL_MOUSE.y < menu.y + menu.h - 47
-			if (
-					--[[(
-						menu.mouseScreenX > menu.x and menu.mouseScreenX < menu.x + menu.w and LOCAL_MOUSE.y > menu.y - 32 and LOCAL_MOUSE.y < menu.y - 11
-					)]]
-					(
-						menu.inmenu and 
-						not menu.inmiddlemenu
-					) or menu.dragging
-				) and not menu.dontdrag
-			then
+						menu.inmenu = menu.mouseScreenX > menu.x and menu.mouseScreenX < menu.x + menu.w and menu.mouseScreenY > menu.y and menu.mouseScreenY < menu.y + menu.h
+			menu.inmiddlemenu = menu.mouseScreenX > menu.x + 9 and menu.mouseScreenX < menu.x + menu.w - 9 and menu.mouseScreenY > menu.y + 25 and menu.mouseScreenY < menu.y + menu.h - 11
+			if ((menu.inmenu and not menu.inmiddlemenu) or menu.dragging) and not menu.dontdrag then
 				if menu.mousedown then
 					if not menu.dragging then
 						clickspot_x = menu.mouseScreenX
-						clickspot_y = LOCAL_MOUSE.y - 36 original_menu_X = menu.x original_menu_y = menu.y
+						clickspot_y = menu.mouseScreenY
+						original_menu_X = menu.x
+						original_menu_y = menu.y
 						menu.dragging = true
 					end
 					menu.x = (original_menu_X - clickspot_x) + menu.mouseScreenX
-					menu.y = (original_menu_y - clickspot_y) + LOCAL_MOUSE.y - 36
+					menu.y = (original_menu_y - clickspot_y) + menu.mouseScreenY
 					if menu.y < 0 then
 						menu.y = 0
 					end
