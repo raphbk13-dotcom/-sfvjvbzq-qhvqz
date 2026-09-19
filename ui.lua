@@ -4111,7 +4111,7 @@ function menu.Initialize(menutable)
 
 				menu.lastActive = menu.windowactive
 		for button, time in next, buttonsInQue do
-			if time and tick() - time < doubleclickDelay then     -- ← CETTE LIGNE
+						if time and tick() - time < doubleclickDelay then
 				button[4].text.Color = RGB(menu.mc[1], menu.mc[2], menu.mc[3])
 				button[4].text.Text = "Confirm?"
 			else
