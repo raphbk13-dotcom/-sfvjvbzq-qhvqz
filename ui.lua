@@ -213,6 +213,7 @@ menu = { -- this is for menu stuffs n shi
 	fading = false,
 	mousedown = false,
     mouseOffsetY = 36,
+	cursorOffsetY = 0,
 	postable = {},
 	options = {},
 	clrs = {
@@ -2464,9 +2465,9 @@ function menu.Initialize(menutable)
 		bbmouse
 	)
 	local lastMousePos = Vector2.new()
-	function menu:set_mouse_pos(x, y)
+		function menu:set_mouse_pos(x, y)
 		FireEvent("bb_mousemoved", lastMousePos ~= Vector2.new(x, y))
-		local oy = menu.mouseOffsetY
+		local oy = menu.cursorOffsetY or 0
 		for k = 1, #bbmouse do
 			local v = bbmouse[k]
 			v.PointA = Vector2.new(x, y + oy)
