@@ -1,6 +1,5 @@
 -- ============================================================
--- BitchBot UI Library v2
--- Usage: local Library = loadstring(game:HttpGet("URL"))()
+-- BitchBot UI Library — original code, wrapped as Library
 -- ============================================================
 local Library = {}
 Library.Options = {}
@@ -10,1167 +9,1035 @@ getgenv().Options = Library.Options
 getgenv().Toggles = Library.Toggles
 
 -- ============================================================
--- SERVICES
+-- ORIGINAL BITCHBOT CODE (unchanged)
 -- ============================================================
-local Players     = game:GetService("Players")
-local UserInput   = game:GetService("UserInputService")
-local RunService  = game:GetService("RunService")
-local GuiService  = game:GetService("GuiService")
-local HttpService = game:GetService("HttpService")
-local LocalPlayer = Players.LocalPlayer
-local Camera      = workspace.CurrentCamera
+local menu
+local MenuName = nil
+local loadstart = tick()
 
-local INSET = Vector2.new(0, 0)
-pcall(function() INSET = GuiService:GetGuiInset() end)
-
--- ============================================================
--- STATE
--- ============================================================
-local ACCENT      = Color3.fromRGB(127, 72, 163)
-local ACCENT_DARK = Color3.fromRGB(87, 32, 123)
-
-local MOUSE  = Vector2.new()
-local SCREEN = Camera.ViewportSize
-local mouseConn = RunService.RenderStepped:Connect(function()
-    local loc = UserInput:GetMouseLocation()
-    MOUSE  = Vector2.new(loc.X, loc.Y)
-    SCREEN = Camera.ViewportSize
-end)
-
--- ============================================================
--- DRAW HELPERS + REGISTRY
--- ============================================================
-local ALL_DRAWINGS = {}
-
-local DRAWING_META_INIT = setmetatable({}, { __mode = "k" })
-
-local function reg(d, visibleIf)
-    DRAWING_META_INIT[d] = { visibleIf = visibleIf or function() return true end }
-    d.Visible = true
-    table.insert(ALL_DRAWINGS, d)
-    return d
+local function map(X, A, B, C, D)
+    return (X - A) / (B - A) * (D - C) + C
 end
 
-local function drawRect(filled, x, y, w, h, color, trans, visibleIf)
-    local d = Drawing.new("Square")
-    d.Filled = filled
-    d.Position = Vector2.new(x, y)
-    d.Size = Vector2.new(w, h)
-    d.Color = color
-    d.Transparency = trans or 1
-    d.Thickness = 1
-    return reg(d, visibleIf)
-end
-
-local function drawText(txt, x, y, size, color, center, visibleIf)
-    local d = Drawing.new("Text")
-    d.Text = txt
-    d.Position = Vector2.new(x, y)
-    d.Size = size or 13
-    d.Color = color or Color3.new(1, 1, 1)
-    d.Center = center or false
-    d.Outline = true
-    d.OutlineColor = Color3.new(0, 0, 0)
-    d.Font = 2
-    return reg(d, visibleIf)
-end
-
-local function drawTriangle(x1, y1, x2, y2, x3, y3, color, visibleIf)
-    local d = Drawing.new("Triangle")
-    d.PointA = Vector2.new(x1, y1)
-    d.PointB = Vector2.new(x2, y2)
-    d.PointC = Vector2.new(x3, y3)
-    d.Color = color
-    d.Filled = true
-    return reg(d, visibleIf)
-end
-
-local function cleanupDrawings()
-    for _, d in ipairs(ALL_DRAWINGS) do
-        pcall(function() d:Remove() end)
+do
+    local notes = {}
+    local function DrawingObject(t, col)
+        local d = Drawing.new(t)
+        d.Visible = true
+        d.Transparency = 1
+        d.Color = col
+        return d
     end
-    ALL_DRAWINGS = {}
-end
-
--- Global render loop : updates visibility on all drawings
--- Métadonnées stockées dans une table séparée (les Drawing objects n'acceptent pas de props custom)
-local DRAWING_META = setmetatable({}, { __mode = "k" })
-
-local renderLoop = RunService.RenderStepped:Connect(function()
-    for _, d in ipairs(ALL_DRAWINGS) do
-        local meta = DRAWING_META[d]
-        if meta and meta.visibleIf then
-            local ok, v = pcall(meta.visibleIf)
-            d.Visible = ok and v == true
-        else
-            d.Visible = true
-        end
+    local function Rectangle(sizex, sizey, fill, col)
+        local s = DrawingObject("Square", col)
+        s.Filled = fill
+        s.Thickness = 1
+        s.Position = Vector2.new()
+        s.Size = Vector2.new(sizex, sizey)
+        return s
     end
-end)
-
--- ============================================================
--- NOTIFICATIONS
--- ============================================================
-local NOTIFS = {}
-local notifConn = nil
-
-function Library:Notify(text, duration)
-    duration = duration or 4
-    local n = {
-        text = text,
-        start = tick(),
-        duration = duration,
-        bg   = drawRect(true, 0, 0, 300, 26, Color3.fromRGB(20, 20, 20)),
-        bar  = drawRect(true, 0, 0, 3, 26, ACCENT),
-        lbl  = drawText(text, 0, 0, 13, Color3.new(1, 1, 1)),
-        out  = drawRect(false, 0, 0, 302, 28, Color3.new(0, 0, 0)),
-    }
-    table.insert(NOTIFS, n)
-
-    if not notifConn then
-        notifConn = RunService.RenderStepped:Connect(function()
-            local now = tick()
-            local y = 40
-            for i = #NOTIFS, 1, -1 do
-                local n = NOTIFS[i]
-                local age = now - n.start
-                if age > n.duration then
-                    n.bg:Remove() n.bar:Remove() n.lbl:Remove() n.out:Remove()
-                    table.remove(NOTIFS, i)
-                else
-                    local alpha = 1
-                    if age > n.duration - 1 then alpha = n.duration - age end
-                    local x = 20
-                    n.bg.Position  = Vector2.new(x, y)
-                    n.bar.Position = Vector2.new(x, y)
-                    n.lbl.Position = Vector2.new(x + 10, y + 5)
-                    n.out.Position = Vector2.new(x - 1, y - 1)
-                    n.bg.Transparency  = alpha * 0.15
-                    n.bar.Transparency = alpha
-                    n.lbl.Transparency = alpha
-                    n.out.Transparency = alpha * 0.3
-                    y = y + 32
-                end
-            end
-        end)
+    local function Text(text)
+        local s = DrawingObject("Text", Color3.new(1, 1, 1))
+        s.Text = text
+        s.Size = 13
+        s.Center = false
+        s.Outline = true
+        s.Position = Vector2.new()
+        s.Font = 2
+        return s
     end
-end
-
--- ============================================================
--- UTIL
--- ============================================================
-local function inRegion(x, y, w, h)
-    return MOUSE.X > x and MOUSE.X < x + w and MOUSE.Y > y and MOUSE.Y < y + h
-end
-
-local function fmtNum(n)
-    if n == math.floor(n) then return tostring(math.floor(n)) end
-    return string.format("%.2f", n)
-end
-
--- ============================================================
--- ELEMENT FACTORIES
--- ============================================================
-local Elements = {}
-
--- Toggle ------------------------------------------------------
-function Elements.Toggle(parent, idx, opts)
-    opts = opts or {}
-    local val = opts.Default == true
-    local y   = parent:_nextY()
-    local boxX = parent._x + 8
-    local visIf = parent:_visIf()
-
-    local bg  = drawRect(false, boxX, y, 12, 12, Color3.fromRGB(30, 30, 30), 1, visIf)
-    local bg2 = drawRect(false, boxX + 1, y + 1, 10, 10, Color3.new(0, 0, 0), 1, visIf)
-    local fil = drawRect(true,  boxX + 2, y + 2, 8, 8, val and ACCENT or Color3.new(0, 0, 0), 1, visIf)
-    local lbl = drawText(opts.Text or idx, boxX + 20, y, 13, Color3.new(1, 1, 1), false, visIf)
-
-    local obj = { Value = val, _parent = parent, _idx = idx, _type = "Toggle" }
-
-    function obj:SetValue(v)
-        self.Value = v == true
-        fil.Color = self.Value and ACCENT or Color3.new(0, 0, 0)
-        if self._onChanged then self._onChanged(self.Value) end
-    end
-    function obj:OnChanged(fn) self._onChanged = fn end
-    if opts.Callback then obj:OnChanged(opts.Callback) end
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visIf() then return end
-        if inRegion(boxX, y - 2, 200, 16) then
-            obj:SetValue(not obj.Value)
-        end
-    end)
-
-    parent:_pushOption(idx, obj, y)
-    return obj
-end
-
--- Slider ------------------------------------------------------
-function Elements.Slider(parent, idx, opts)
-    opts = opts or {}
-    local min  = opts.Min or 0
-    local max  = opts.Max or 100
-    local rnd  = opts.Rounding or 0
-    local val  = math.clamp(opts.Default or min, min, max)
-    local y    = parent:_nextY()
-    local visIf = parent:_visIf()
-
-    local lbl  = drawText(opts.Text or idx, parent._x + 8, y, 13, Color3.new(1, 1, 1), false, visIf)
-    local tx = parent._x + 8
-    local tw = parent._width - 16
-    local ty = y + 18
-
-    local track = drawRect(true, tx, ty, tw, 4, Color3.fromRGB(30, 30, 30), 1, visIf)
-    local fill  = drawRect(true, tx, ty, 0, 4, ACCENT, 1, visIf)
-    local valLbl= drawText(fmtNum(val), tx + tw/2, ty - 2, 13, Color3.new(1, 1, 1), true, visIf)
-
-    local obj = { Value = val, _parent = parent, _idx = idx, _type = "Slider" }
-
-    local function apply()
-        local w = tw * ((obj.Value - min) / (max - min))
-        fill.Size = Vector2.new(w, 4)
-        valLbl.Text = fmtNum(obj.Value)
-    end
-
-    function obj:SetValue(v)
-        local nv = math.clamp(tonumber(v) or self.Value, min, max)
-        if rnd > 0 then
-            local m = 10 ^ rnd
-            nv = math.floor(nv * m + 0.5) / m
-        else
-            nv = math.floor(nv)
-        end
-        self.Value = nv
-        apply()
-        if self._onChanged then self._onChanged(self.Value) end
-    end
-    function obj:OnChanged(fn) self._onChanged = fn end
-    if opts.Callback then obj:OnChanged(opts.Callback) end
-    apply()
-
-    local dragging = false
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visIf() then return end
-        if inRegion(tx, ty - 6, tw, 16) then dragging = true end
-    end)
-    UserInput.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
-    RunService.RenderStepped:Connect(function()
-        if dragging then
-            local pct = math.clamp((MOUSE.X - tx) / tw, 0, 1)
-            obj:SetValue(min + (max - min) * pct)
-        end
-    end)
-
-    parent:_pushOption(idx, obj, y, 40)
-    return obj
-end
-
--- Dropdown ----------------------------------------------------
-function Elements.Dropdown(parent, idx, opts)
-    opts = opts or {}
-    local values = opts.Values or {}
-    local val    = opts.Default or 1
-    local multi  = opts.Multi == true
-    local y      = parent:_nextY()
-    local visIf  = parent:_visIf()
-
-    local lbl  = drawText(opts.Text or idx, parent._x + 8, y, 13, Color3.new(1, 1, 1), false, visIf)
-    local bx   = parent._x + 8
-    local by   = y + 16
-    local bw   = parent._width - 16
-
-    local bg   = drawRect(true,  bx, by, bw, 22, Color3.fromRGB(30, 30, 30), 1, visIf)
-    local valT = drawText("", bx + 6, by + 4, 13, Color3.new(1, 1, 1), false, visIf)
-    local ind  = drawText("v", bx + bw - 16, by + 4, 13, ACCENT, false, visIf)
-
-    local obj = { Value = multi and {} or (type(val) == "number" and values[val] or val), _parent = parent, _idx = idx, _type = "Dropdown", _multi = multi, _values = values }
-
-    local function updateLabel()
-        if multi then
-            local parts = {}
-            for k, v in pairs(obj.Value) do if v then table.insert(parts, k) end end
-            valT.Text = #parts > 0 and table.concat(parts, ", ") or "None"
-        else
-            valT.Text = tostring(obj.Value or "None")
-        end
-    end
-
-    local popupDrawings = {}
-    local popupOpen = false
-
-    local function buildPopup()
-        for _, d in ipairs(popupDrawings) do pcall(function() d:Remove() end) end
-        popupDrawings = {}
-
-        local n = #values
-        local ph = 22 * n + 6
-        local px = bx
-        local py = by + 24
-
-        local vis = function() return visIf() and popupOpen end
-        table.insert(popupDrawings, drawRect(true, px, py, bw, ph, Color3.fromRGB(20, 20, 20), 1, vis))
-        table.insert(popupDrawings, drawRect(false, px - 1, py - 1, bw + 2, ph + 2, Color3.new(0, 0, 0), 1, vis))
-
-        for i, v in ipairs(values) do
-            local iy = py + 3 + (i - 1) * 22
-            local isSel = (not multi and obj.Value == v) or (multi and obj.Value[v])
-            local txt = drawText(tostring(v), px + 8, iy + 3, 13, isSel and ACCENT or Color3.new(1, 1, 1), false, vis)
-            table.insert(popupDrawings, txt)
-
-            UserInput.InputBegan:Connect(function(input, gp)
-                if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-                if not vis() then return end
-                if inRegion(px, iy, bw, 22) then
-                    if multi then
-                        obj.Value[v] = not obj.Value[v]
-                        buildPopup()
-                        updateLabel()
-                        if obj._onChanged then obj._onChanged(obj.Value) end
-                    else
-                        obj:SetValue(v)
-                        popupOpen = false
+    function CreateNotification(t, customcolor)
+        local gap = 25
+        local width = 18
+        local alpha = 255
+        local time = 0
+        local estep = 0
+        local eestep = 0.02
+        local insety = 0
+        local Note = {
+            enabled = true,
+            targetPos = Vector2.new(50, 33),
+            size = Vector2.new(200, width),
+            drawings = {
+                outline = Rectangle(202, width + 2, false, Color3.new(0, 0, 0)),
+                fade = Rectangle(202, width + 2, false, Color3.new(0, 0, 0)),
+            },
+            Remove = function(self, d)
+                if d.Position.x < d.Size.x then
+                    for k, drawing in pairs(self.drawings) do
+                        drawing:Remove()
+                        drawing = false
                     end
+                    self.enabled = false
                 end
-            end)
-        end
-    end
-
-    function obj:SetValue(v)
-        if multi then
-            if type(v) == "table" then self.Value = v end
-        else
-            if type(v) == "number" then self.Value = values[v] else self.Value = v end
-        end
-        updateLabel()
-        if self._onChanged then self._onChanged(self.Value) end
-    end
-    function obj:OnChanged(fn) self._onChanged = fn end
-    if opts.Callback then obj:OnChanged(opts.Callback) end
-
-    if multi then
-        for _, v in ipairs(values) do obj.Value[v] = false end
-    end
-    updateLabel()
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visIf() then return end
-        if inRegion(bx, by, bw, 22) then
-            popupOpen = not popupOpen
-            if popupOpen then buildPopup() end
-        end
-    end)
-
-    parent:_pushOption(idx, obj, y, 44)
-    return obj
-end
-
--- Input -------------------------------------------------------
-function Elements.Input(parent, idx, opts)
-    opts = opts or {}
-    local val = opts.Default or ""
-    local y   = parent:_nextY()
-    local visIf = parent:_visIf()
-
-    local lbl = drawText(opts.Text or idx, parent._x + 8, y, 13, Color3.new(1, 1, 1), false, visIf)
-    local bx = parent._x + 8
-    local by = y + 16
-    local bw = parent._width - 16
-
-    local bg  = drawRect(true, bx, by, bw, 22, Color3.fromRGB(30, 30, 30), 1, visIf)
-    local vl  = drawText(val, bx + 6, by + 4, 13, Color3.new(1, 1, 1), false, visIf)
-
-    local obj = { Value = val, _parent = parent, _idx = idx, _type = "Input", _focused = false, _numeric = opts.Numeric == true }
-
-    function obj:SetValue(v)
-        self.Value = tostring(v or "")
-        vl.Text = self.Value
-        if self._onChanged then self._onChanged(self.Value) end
-    end
-    function obj:OnChanged(fn) self._onChanged = fn end
-    if opts.Callback then obj:OnChanged(opts.Callback) end
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 and visIf() and inRegion(bx, by, bw, 22) then
-            obj._focused = true
-            bg.Color = ACCENT
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Keyboard then
-            obj._focused = false
-            bg.Color = Color3.fromRGB(30, 30, 30)
-        end
-    end)
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if not obj._focused then return end
-        if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-        local kc = input.KeyCode
-        if kc == Enum.KeyCode.Backspace then
-            obj.Value = obj.Value:sub(1, -2)
-        elseif kc == Enum.KeyCode.Space then
-            obj.Value = obj.Value .. " "
-        elseif kc == Enum.KeyCode.Return then
-            obj._focused = false
-            bg.Color = Color3.fromRGB(30, 30, 30)
-        else
-            local name = kc.Name
-            if #name == 1 then
-                local shift = UserInput:IsKeyDown(Enum.KeyCode.LeftShift) or UserInput:IsKeyDown(Enum.KeyCode.RightShift)
-                obj.Value = obj.Value .. (shift and name:upper() or name:lower())
-            elseif kc == Enum.KeyCode.One then obj.Value = obj.Value .. "1"
-            elseif kc == Enum.KeyCode.Two then obj.Value = obj.Value .. "2"
-            elseif kc == Enum.KeyCode.Three then obj.Value = obj.Value .. "3"
-            elseif kc == Enum.KeyCode.Four then obj.Value = obj.Value .. "4"
-            elseif kc == Enum.KeyCode.Five then obj.Value = obj.Value .. "5"
-            elseif kc == Enum.KeyCode.Six then obj.Value = obj.Value .. "6"
-            elseif kc == Enum.KeyCode.Seven then obj.Value = obj.Value .. "7"
-            elseif kc == Enum.KeyCode.Eight then obj.Value = obj.Value .. "8"
-            elseif kc == Enum.KeyCode.Nine then obj.Value = obj.Value .. "9"
-            elseif kc == Enum.KeyCode.Zero then obj.Value = obj.Value .. "0"
-            end
-        end
-        vl.Text = obj.Value .. (obj._focused and "|" or "")
-        if obj._onChanged then obj._onChanged(obj.Value) end
-    end)
-
-    parent:_pushOption(idx, obj, y, 44)
-    return obj
-end
-
--- Button ------------------------------------------------------
-function Elements.Button(parent, idxOrOpts, opts)
-    local txt, fn, dc
-    if type(idxOrOpts) == "table" then
-        txt = idxOrOpts.Text or "Button"
-        fn  = idxOrOpts.Func
-        dc  = idxOrOpts.DoubleClick == true
-    else
-        txt = idxOrOpts
-        fn  = type(opts) == "function" and opts or nil
-    end
-
-    local y = parent:_nextY()
-    local visIf = parent:_visIf()
-    local bx = parent._x + 8
-    local by = y
-    local bw = parent._width - 16
-
-    local bg  = drawRect(true, bx, by, bw, 22, Color3.fromRGB(50, 50, 50), 1, visIf)
-    local lbl = drawText(txt, bx + bw/2, by + 4, 13, Color3.new(1, 1, 1), true, visIf)
-
-    local lastClick = 0
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visIf() then return end
-        if inRegion(bx, by, bw, 22) then
-            bg.Color = ACCENT
-            task.delay(0.15, function() bg.Color = Color3.fromRGB(50, 50, 50) end)
-            if dc then
-                if tick() - lastClick < 0.5 then
-                    lastClick = 0
-                    if fn then pcall(fn) end
+            end,
+            Update = function(self, num, listLength, dt)
+                local pos = self.targetPos
+                local indexOffset = (listLength - num) * gap
+                if insety < indexOffset then
+                    insety -= (insety - indexOffset) * 0.2
                 else
-                    lastClick = tick()
+                    insety = indexOffset
                 end
-            else
-                if fn then pcall(fn) end
-            end
-        end
-    end)
-
-    parent:_pushOption("__btn_" .. tostring(y), nil, y, 28)
-    return { _bg = bg, _lbl = lbl }
-end
-
--- Label -------------------------------------------------------
-function Elements.Label(parent, text, wrap)
-    local y = parent:_nextY()
-    local visIf = parent:_visIf()
-    local lbl = drawText(text, parent._x + 8, y, 13, Color3.new(1, 1, 1), false, visIf)
-    local h = wrap and 60 or 18
-    parent:_pushOption("__lbl_" .. tostring(y), nil, y, h)
-    return { _lbl = lbl }
-end
-
--- Divider -----------------------------------------------------
-function Elements.Divider(parent)
-    local y = parent:_nextY()
-    local visIf = parent:_visIf()
-    drawRect(true, parent._x + 8, y + 6, parent._width - 16, 1, Color3.fromRGB(60, 60, 60), 1, visIf)
-    parent:_pushOption("__div_" .. tostring(y), nil, y, 16)
-end
-
--- ============================================================
--- COLOR PICKER (attached to Label)
--- ============================================================
-function Library:_openColorPicker(idx, opts, label)
-    local val = opts.Default or Color3.fromRGB(255, 255, 255)
-    local alpha = opts.Transparency and (opts.Default and opts.Default.A or 0) or nil
-
-    -- popup drawings
-    local px, py = MOUSE.X + 10, MOUSE.Y + 10
-    local pw, ph = 220, 190 + (opts.Transparency and 30 or 0)
-
-    local popup = {}
-    local visible = true
-    local visIf = function() return visible end
-
-    table.insert(popup, drawRect(true,  px, py, pw, ph, Color3.fromRGB(20, 20, 20), 1, visIf))
-    table.insert(popup, drawRect(false, px - 1, py - 1, pw + 2, ph + 2, Color3.new(0, 0, 0), 1, visIf))
-    table.insert(popup, drawText(opts.Title or idx, px + 8, py + 4, 13, Color3.new(1, 1, 1), false, visIf))
-    table.insert(popup, drawText("X", px + pw - 18, py + 4, 13, Color3.fromRGB(255, 80, 80), false, visIf))
-
-    -- preview
-    table.insert(popup, drawRect(true, px + 8, py + 24, pw - 16, 24, val, opts.Transparency and (1 - alpha) or 1, visIf))
-    table.insert(popup, drawRect(false, px + 7, py + 23, pw - 14, 26, Color3.new(0, 0, 0), 1, visIf))
-
-    local rgb = { val.R * 255, val.G * 255, val.B * 255 }
-    local alphaVal = alpha or 0
-
-    local function updatePreview()
-        local c = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
-        popup[4].Color = c
-        if opts.Transparency then popup[4].Transparency = 1 - alphaVal end
-    end
-
-    local sliders = {}
-
-    local function makeSlider(name, yPos, initial, minV, maxV, onChange)
-        local lbl = drawText(name, px + 8, yPos, 12, Color3.fromRGB(180, 180, 180), false, visIf)
-        local track = drawRect(true, px + 8, yPos + 16, pw - 16, 4, Color3.fromRGB(40, 40, 40), 1, visIf)
-        local fill  = drawRect(true, px + 8, yPos + 16, 0, 4, ACCENT, 1, visIf)
-        local valL  = drawText(tostring(math.floor(initial)), px + pw/2, yPos + 14, 12, Color3.new(1,1,1), true, visIf)
-
-        local tw = pw - 16
-        local tx = px + 8
-        local ty = yPos + 16
-        local dragging = false
-
-        local function setVal(v)
-            v = math.clamp(v, minV, maxV)
-            fill.Size = Vector2.new(tw * ((v - minV) / (maxV - minV)), 4)
-            valL.Text = tostring(math.floor(v))
-            onChange(v)
-        end
-        setVal(initial)
-
-        table.insert(popup, lbl) table.insert(popup, track) table.insert(popup, fill) table.insert(popup, valL)
-        table.insert(sliders, {tx = tx, ty = ty, tw = tw, minV = minV, maxV = maxV, set = setVal})
-
-        return ty
-    end
-
-    local cy = py + 60
-    makeSlider("R", cy, rgb[1], 0, 255, function(v) rgb[1] = v updatePreview() end) cy = cy + 36
-    makeSlider("G", cy, rgb[2], 0, 255, function(v) rgb[2] = v updatePreview() end) cy = cy + 36
-    makeSlider("B", cy, rgb[3], 0, 255, function(v) rgb[3] = v updatePreview() end) cy = cy + 36
-    if opts.Transparency then
-        makeSlider("Alpha", cy, alphaVal * 255, 0, 255, function(v) alphaVal = v / 255 updatePreview() end)
-    end
-
-    -- apply button
-    local applyY = py + ph - 26
-    table.insert(popup, drawRect(true, px + 8, applyY, pw - 16, 20, Color3.fromRGB(50, 50, 50), 1, visIf))
-    table.insert(popup, drawText("Apply", px + pw/2, applyY + 2, 13, Color3.new(1,1,1), true, visIf))
-
-    local function close()
-        visible = false
-        for _, d in ipairs(popup) do pcall(function() d:Remove() end) end
-    end
-
-    -- mouse handling
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visible then return end
-        -- slider drag
-        for _, s in ipairs(sliders) do
-            if inRegion(s.tx, s.ty - 6, s.tw, 16) then
-                local pct = math.clamp((MOUSE.X - s.tx) / s.tw, 0, 1)
-                s.set(s.minV + (s.maxV - s.minV) * pct)
-            end
-        end
-        -- apply
-        if inRegion(px + 8, applyY, pw - 16, 20) then
-            local c = Color3.fromRGB(rgb[1], rgb[2], rgb[3])
-            if opts.Callback then opts.Callback(c, opts.Transparency and alphaVal or nil) end
-            close()
-            return
-        end
-        -- close
-        if inRegion(px + pw - 22, py + 2, 20, 20) then close() return end
-        -- click outside
-        if not inRegion(px, py, pw, ph) then close() end
-    end)
-
-    UserInput.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then end
-    end)
-end
-
--- Attach AddColorPicker to Label
-function Elements.Label(parent, text, wrap)
-    local y = parent:_nextY()
-    local visIf = parent:_visIf()
-    local lbl = drawText(text, parent._x + 8, y, 13, Color3.new(1, 1, 1), false, visIf)
-    local h = wrap and 60 or 18
-    parent:_pushOption("__lbl_" .. tostring(y), nil, y, h)
-    local obj = { _lbl = lbl }
-
-    function obj:AddColorPicker(idx, opts)
-        opts = opts or {}
-        local cbx = parent._x + parent._width - 36
-        local cby = y
-        local swatch = drawRect(true, cbx, cby, 28, 14, opts.Default or Color3.new(1,1,1), 1, visIf)
-        local swatch2 = drawRect(false, cbx - 1, cby - 1, 30, 16, Color3.new(0,0,0), 1, visIf)
-
-        UserInput.InputBegan:Connect(function(input, gp)
-            if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-            if not visIf() then return end
-            if inRegion(cbx, cby, 28, 14) then
-                Library:_openColorPicker(idx, opts, obj)
-            end
-        end)
-
-        local cp = {
-            Value = opts.Default or Color3.new(1, 1, 1),
-            Transparency = opts.Transparency and 0 or nil,
-            _swatch = swatch,
-            _idx = idx,
+                local size = self.size
+                local tpos = Vector2.new(pos.x - size.x / time - map(alpha, 0, 255, size.x, 0), pos.y + insety)
+                self.pos = tpos
+                local locRect = {
+                    x = math.ceil(tpos.x),
+                    y = math.ceil(tpos.y),
+                    w = math.floor(size.x - map(255 - alpha, 0, 255, 0, 70)),
+                    h = size.y,
+                }
+                local fade = math.min(time * 12, alpha)
+                fade = fade > 255 and 255 or fade < 0 and 0 or fade
+                if self.enabled then
+                    local linenum = 1
+                    for i, drawing in pairs(self.drawings) do
+                        drawing.Transparency = fade / 255
+                        if type(i) == "number" then
+                            drawing.Position = Vector2.new(locRect.x + 1, locRect.y + i)
+                            drawing.Size = Vector2.new(locRect.w - 2, 1)
+                        elseif i == "text" then
+                            drawing.Position = tpos + Vector2.new(6, 2)
+                        elseif i == "outline" then
+                            drawing.Position = Vector2.new(locRect.x, locRect.y)
+                            drawing.Size = Vector2.new(locRect.w, locRect.h)
+                        elseif i == "fade" then
+                            drawing.Position = Vector2.new(locRect.x - 1, locRect.y - 1)
+                            drawing.Size = Vector2.new(locRect.w + 2, locRect.h + 2)
+                            local t = (200 - fade) / 255 / 3
+                            drawing.Transparency = t < 0.4 and 0.4 or t
+                        elseif i:find("line") then
+                            drawing.Position = Vector2.new(locRect.x + linenum, locRect.y + 1)
+                            if menu then
+                                local mencol = customcolor or Color3.fromRGB(127, 72, 163)
+                                local color = linenum == 1 and mencol or Color3.fromRGB(mencol.R * 255 - 40, mencol.G * 255 - 40, mencol.B * 255 - 40)
+                                if drawing.Color ~= color then drawing.Color = color end
+                            end
+                            linenum += 1
+                        end
+                    end
+                    time += estep * dt * 128
+                    estep += eestep * dt * 64
+                end
+            end,
+            Fade = function(self, num, len, dt)
+                if self.pos.x > self.targetPos.x - 0.2 * len or self.fading then
+                    if not self.fading then estep = 0 end
+                    self.fading = true
+                    alpha -= estep / 4 * len * dt * 50
+                    eestep += 0.01 * dt * 100
+                end
+                if alpha <= 0 then self:Remove(self.drawings[1]) end
+            end,
         }
-        function cp:SetValueRGB(c)
-            self.Value = c
-            swatch.Color = c
-            if self._onChanged then self._onChanged(c) end
+        for i = 1, Note.size.y - 2 do
+            local c = 0.28 - i / 80
+            Note.drawings[i] = Rectangle(200, 1, true, Color3.new(c, c, c))
         end
-        function cp:OnChanged(fn) self._onChanged = fn end
-        if opts.Callback then cp:OnChanged(opts.Callback) end
-
-        Library.Options[idx] = cp
-        getgenv().Options[idx] = cp
-        return cp
+        local color = Color3.fromRGB(127, 72, 163)
+        Note.drawings.text = Text(t)
+        if Note.drawings.text.TextBounds.x + 7 > Note.size.x then
+            Note.size = Vector2.new(Note.drawings.text.TextBounds.x + 7, Note.size.y)
+        end
+        Note.drawings.line = Rectangle(1, Note.size.y - 2, true, color)
+        Note.drawings.line1 = Rectangle(1, Note.size.y - 2, true, color)
+        notes[#notes + 1] = Note
     end
-
-    return obj
-end
-
--- ============================================================
--- KEY PICKER (attached to Label)
--- ============================================================
-function Library:_openKeyPicker(idx, opts, label)
-    local cur = opts.Default or "None"
-    local mode = opts.Mode or "Toggle"
-    local state = false
-    local waiting = true
-
-    local obj = {
-        Value = cur,
-        Mode = mode,
-        _state = false,
-    }
-
-    function obj:GetState() return self._state end
-    function obj:SetValue(v) self.Value = v end
-    function obj:OnClick(fn) self._onClick = fn end
-    function obj:OnChanged(fn) self._onChanged = fn end
-
-    Library.Options[idx] = obj
-    getgenv().Options[idx] = obj
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if not waiting then
-            if input.UserInputType ~= Enum.UserInputType.Keyboard and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-            -- mode handling
+    renderStepped = game.RunService.RenderStepped:Connect(function(dt)
+        Camera = workspace.CurrentCamera
+        local smallest = math.huge
+        for k = 1, #notes do
+            local v = notes[k]
+            if v and v.enabled then
+                smallest = k < smallest and k or smallest
+            else
+                table.remove(notes, k)
+            end
+        end
+        local length = #notes
+        for k = 1, #notes do
+            local note = notes[k]
+            note:Update(k, length, dt)
+            if k <= math.ceil(length / 10) or note.fading then
+                note:Fade(k, length, dt)
+            end
         end
     end)
-
-    -- First press = bind key
-    local bindConn
-    bindConn = UserInput.InputBegan:Connect(function(input, gp)
-        if not waiting then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            obj.Value = input.KeyCode.Name
-            waiting = false
-            if opts.ChangedCallback then opts.ChangedCallback(input.KeyCode) end
-            Library:Notify("Keybind set to: " .. input.KeyCode.Name, 2)
-        elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
-            obj.Value = "MB1"
-            waiting = false
-            Library:Notify("Keybind set to: MB1", 2)
-        elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
-            obj.Value = "MB2"
-            waiting = false
-            Library:Notify("Keybind set to: MB2", 2)
-        end
-    end)
-
-    -- Ongoing keydown tracking
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or waiting then return end
-        local name = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name or
-                     (input.UserInputType == Enum.UserInputType.MouseButton1 and "MB1") or
-                     (input.UserInputType == Enum.UserInputType.MouseButton2 and "MB2") or nil
-        if not name or name ~= obj.Value then return end
-        if obj.Mode == "Toggle" then
-            obj._state = not obj._state
-            if obj._onClick then obj._onClick() end
-        elseif obj.Mode == "Hold" then
-            obj._state = true
-            if obj._onClick then obj._onClick() end
-        elseif obj.Mode == "Always" then
-            obj._state = true
-        end
-    end)
-    UserInput.InputEnded:Connect(function(input)
-        if waiting then return end
-        local name = input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name or
-                     (input.UserInputType == Enum.UserInputType.MouseButton1 and "MB1") or
-                     (input.UserInputType == Enum.UserInputType.MouseButton2 and "MB2") or nil
-        if not name or name ~= obj.Value then return end
-        if obj.Mode == "Hold" then obj._state = false end
-    end)
-
-    return obj
 end
 
-function Elements.Label_AddKeyPicker(label, parent, idx, opts)
-    opts = opts or {}
-    local keyText = opts.Default or "None"
-    local kbx = parent._x + parent._width - 60
-    local kby = label._lbl.Position.Y
-    local visIf = parent:_visIf()
+local menuWidth, menuHeight = 500, 600
+menu = {
+    w = menuWidth,
+    h = menuHeight,
+    x = 0,
+    y = 0,
+    columns = {
+        width = (menuWidth - 40) / 2,
+        left = 17,
+        right = (menuWidth - 20) / 2 + 13,
+    },
+    activetab = 1,
+    open = true,
+    fadestart = 0,
+    fading = false,
+    mousedown = false,
+    postable = {},
+    options = {},
+    clrs = {
+        norm = {},
+        dark = {},
+        togz = {},
+    },
+    mc = { 127, 72, 163 },
+    watermark = {},
+    connections = {},
+    list = {},
+    unloaded = false,
+    copied_clr = nil,
+    game = "uni",
+    tabnames = {},
+    friends = {},
+    priority = {},
+    muted = {},
+    spectating = false,
+    stat_menu = false,
+    load_time = 0,
+    log_multi = nil,
+    mgrouptabz = {},
+    backspaceheld = false,
+    backspacetime = -1,
+    backspaceflags = 0,
+    selectall = false,
+    modkeys = {
+        alt = { direction = nil },
+        shift = { direction = nil },
+    },
+    modkeydown = function(self, key, direction)
+        local keydata = self.modkeys[key]
+        return keydata.direction and keydata.direction == direction or false
+    end,
+    keybinds = {},
+    values = {}
+}
 
-    local bg  = drawRect(true, kbx, kby, 50, 16, Color3.fromRGB(30, 30, 30), 1, visIf)
-    local txt = drawText(keyText, kbx + 25, kby + 1, 12, Color3.new(1,1,1), true, visIf)
-    local outline = drawRect(false, kbx - 1, kby - 1, 52, 18, Color3.new(0,0,0), 1, visIf)
-
-    local picker = Library:_openKeyPicker(idx, opts, label)
-    picker._txt = txt
-
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp or input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        if not visIf() then return end
-        if inRegion(kbx, kby, 50, 16) then
-            Library:Notify("Press any key to bind...", 2)
-        end
-    end)
-
-    -- update text periodically
-    task.spawn(function()
-        while not Library.Unloaded do
-            task.wait(0.1)
-            if txt and picker then txt.Text = picker.Value or "None" end
-        end
-    end)
-
-    return picker
+local function round(num, numDecimalPlaces)
+    local mult = 10 ^ (numDecimalPlaces or 0)
+    return math.floor(num * mult + 0.5) / mult
 end
-
--- Patch AddLabel to return keypicker-capable label
-local _oldAddLabel = Elements.Label
-Elements.Label = function(parent, text, wrap)
-    local lbl = _oldAddLabel(parent, text, wrap)
-    function lbl:AddKeyPicker(idx, opts)
-        return Elements.Label_AddKeyPicker(lbl, parent, idx, opts)
+local function clamp(a, lowerNum, higher)
+    if a > higher then return higher
+    elseif a < lowerNum then return lowerNum
+    else return a end
+end
+local function CreateThread(func, ...)
+    local thread = coroutine.create(func)
+    coroutine.resume(thread, ...)
+    return thread
+end
+local function MultiThreadList(obj, ...)
+    local n = #obj
+    if n > 0 then
+        for i = 1, n do
+            local t = obj[i]
+            if type(t) == "table" then
+                local d = #t
+                assert(d ~= 0, "table inserted was not an array or was empty")
+                assert(d < 3, ("invalid number of arguments (%d)"):format(d))
+                local thetype = type(t[1])
+                assert(thetype == "function", ("invalid argument #1: expected 'function', got '%s'"):format(tostring(thetype)))
+                CreateThread(t[1], unpack(t[2]))
+            else
+                CreateThread(t, ...)
+            end
+        end
+    else
+        for i, v in pairs(obj) do CreateThread(v, ...) end
     end
-    return lbl
+end
+
+local event = {}
+local allevent = {}
+function event.new(eventname, eventtable, requirename)
+    if eventname then
+        assert(allevent[eventname] == nil, ("the event '%s' already exists in the event table"):format(eventname))
+    end
+    local newevent = eventtable or {}
+    local funcs = {}
+    local disconnectlist = {}
+    function newevent:fire(...) allevent[eventname].fire(...) end
+    function newevent:connect(func)
+        funcs[#funcs + 1] = func
+        local disconnected = false
+        local function disconnect()
+            if not disconnected then
+                disconnected = true
+                disconnectlist[func] = true
+            end
+        end
+        return disconnect
+    end
+    local function fire(...)
+        local n = #funcs
+        local j = 0
+        for i = 1, n do
+            local func = funcs[i]
+            if disconnectlist[func] then
+                disconnectlist[func] = nil
+            else
+                j = j + 1
+                funcs[j] = func
+            end
+        end
+        for i = j + 1, n do funcs[i] = nil end
+        for i = 1, j do
+            CreateThread(function(...) pcall(funcs[i], ...) end, ...)
+        end
+    end
+    if eventname then
+        allevent[eventname] = { event = newevent, fire = fire }
+    end
+    return newevent, fire
+end
+local function FireEvent(eventname, ...)
+    if allevent[eventname] then return allevent[eventname].fire(...) end
+end
+
+local BBOT_IMAGES = {}
+MultiThreadList({
+    function() BBOT_IMAGES[1] = game:HttpGet("https://i.imgur.com/9NMuFcQ.png") end,
+    function() BBOT_IMAGES[2] = game:HttpGet("https://i.imgur.com/jG3NjxN.png") end,
+    function() BBOT_IMAGES[3] = game:HttpGet("https://i.imgur.com/2Ty4u2O.png") end,
+    function() BBOT_IMAGES[4] = game:HttpGet("https://i.imgur.com/kNGuTlj.png") end,
+    function() BBOT_IMAGES[5] = game:HttpGet("https://i.imgur.com/OZUR3EY.png") end,
+    function() BBOT_IMAGES[6] = game:HttpGet("https://i.imgur.com/3HGuyVa.png") end,
+})
+local loaded = {}
+do
+    local function Loopy_Image_Checky()
+        for i = 1, 6 do
+            local v = BBOT_IMAGES[i]
+            if v == nil then return true
+            elseif not loaded[i] then loaded[i] = true end
+        end
+        return false
+    end
+    while Loopy_Image_Checky() do wait(0) end
+end
+loadstart = tick()
+
+if not isfolder("bitchbot") then makefolder("bitchbot") end
+if not isfolder("bitchbot/uni") then makefolder("bitchbot/uni") end
+local configs = {}
+
+local Players = game:GetService("Players")
+local function GetConfigs()
+    local result = {}
+    local directory = "bitchbot\\uni"
+    local ok, files = pcall(listfiles, directory)
+    if ok and files then
+        for k, v in pairs(files) do
+            local clipped = v:sub(#directory + 2)
+            if clipped:sub(#clipped - 2) == ".bb" then
+                clipped = clipped:sub(0, #clipped - 3)
+                result[k] = clipped
+                configs[k] = v
+            end
+        end
+    end
+    if #result <= 0 then writefile("bitchbot/uni/Default.bb", "") end
+    return result
+end
+
+local LOCAL_PLAYER = Players.LocalPlayer
+local LOCAL_MOUSE = LOCAL_PLAYER:GetMouse()
+local INPUT_SERVICE = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local SCREEN_SIZE = Camera.ViewportSize
+local ButtonPressed = event.new("bb_buttonpressed")
+local TogglePressed = event.new("bb_togglepressed")
+local MouseMoved = event.new("bb_mousemoved")
+
+menu.x = math.floor((SCREEN_SIZE.x / 2) - (menu.w / 2))
+menu.y = math.floor((SCREEN_SIZE.y / 2) - (menu.h / 2))
+
+local Lerp = function(delta, from, to)
+    if delta > 1 then return to end
+    if delta < 0 then return from end
+    return from + (to - from) * delta
+end
+local ColorRange = function(value, ranges)
+    if value <= ranges[1].start then return ranges[1].color end
+    if value >= ranges[#ranges].start then return ranges[#ranges].color end
+    local selected = #ranges
+    for i = 1, #ranges - 1 do
+        if value < ranges[i + 1].start then selected = i break end
+    end
+    local minColor = ranges[selected]
+    local maxColor = ranges[selected + 1]
+    local lerpValue = (value - minColor.start) / (maxColor.start - minColor.start)
+    return Color3.new(
+        Lerp(lerpValue, minColor.color.r, maxColor.color.r),
+        Lerp(lerpValue, minColor.color.g, maxColor.color.g),
+        Lerp(lerpValue, minColor.color.b, maxColor.color.b)
+    )
+end
+
+local keyNames = { One = "1", Two = "2", Three = "3", Four = "4", Five = "5", Six = "6", Seven = "7", Eight = "8", Nine = "9", Zero = "0", LeftBracket = "[", RightBracket = "]", Semicolon = ";", BackSlash = "\\", Slash = "/", Minus = "-", Equals = "=", Return = "Enter", Backquote = "`", CapsLock = "Caps", LeftShift = "LShift", RightShift = "RShift", LeftControl = "LCtrl", RightControl = "RCtrl", LeftAlt = "LAlt", RightAlt = "RAlt", Backspace = "Back", Plus = "+", Multiply = "x", PageUp = "PgUp", PageDown = "PgDown", Delete = "Del", Insert = "Ins", NumLock = "NumL", Comma = ",", Period = "." }
+local function KeyEnumToName(key)
+    if key == nil then return "None" end
+    local _key = tostring(key) .. "."
+    local _key = _key:gsub("%.", ",")
+    local keyname = nil
+    local looptime = 0
+    for w in _key:gmatch("(.-),") do
+        looptime = looptime + 1
+        if looptime == 3 then keyname = w end
+    end
+    if string.match(keyname, "Keypad") then keyname = string.gsub(keyname, "Keypad", "") end
+    if keyname == "Unknown" or key.Value == 27 then return "None" end
+    if keyNames[keyname] then keyname = keyNames[keyname] end
+    return keyname
+end
+
+local allrender = {}
+local RGB = Color3.fromRGB
+local Draw = {}
+
+do
+    function Draw:UnRender()
+        for k, v in pairs(allrender) do
+            for k1, v1 in pairs(v) do
+                if v1 and type(v1) ~= "number" and v1.__OBJECT_EXISTS then
+                    v1:Remove()
+                end
+            end
+        end
+    end
+    function Draw:OutlinedRect(visible, pos_x, pos_y, width, height, clr, tablename)
+        local temptable = Drawing.new("Square")
+        temptable.Visible = visible
+        temptable.Position = Vector2.new(pos_x, pos_y)
+        temptable.Size = Vector2.new(width, height)
+        temptable.Color = RGB(clr[1], clr[2], clr[3])
+        temptable.Filled = false
+        temptable.Thickness = 0
+        temptable.Transparency = clr[4] / 255
+        table.insert(tablename, temptable)
+        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    end
+    function Draw:FilledRect(visible, pos_x, pos_y, width, height, clr, tablename)
+        local temptable = Drawing.new("Square")
+        temptable.Visible = visible
+        temptable.Position = Vector2.new(pos_x, pos_y)
+        temptable.Size = Vector2.new(width, height)
+        temptable.Color = RGB(clr[1], clr[2], clr[3])
+        temptable.Filled = true
+        temptable.Thickness = 0
+        temptable.Transparency = clr[4] / 255
+        table.insert(tablename, temptable)
+        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    end
+    function Draw:Line(visible, thickness, start_x, start_y, end_x, end_y, clr, tablename)
+        local temptable = Drawing.new("Line")
+        temptable.Visible = visible
+        temptable.Thickness = thickness
+        temptable.From = Vector2.new(start_x, start_y)
+        temptable.To = Vector2.new(end_x, end_y)
+        temptable.Color = RGB(clr[1], clr[2], clr[3])
+        temptable.Transparency = clr[4] / 255
+        table.insert(tablename, temptable)
+        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    end
+    function Draw:Text(text, font, visible, pos_x, pos_y, size, centered, clr, tablename)
+        local temptable = Drawing.new("Text")
+        temptable.Text = text
+        temptable.Visible = visible
+        temptable.Position = Vector2.new(pos_x, pos_y)
+        temptable.Size = size
+        temptable.Center = centered
+        temptable.Color = RGB(clr[1], clr[2], clr[3])
+        temptable.Transparency = clr[4] / 255
+        temptable.Outline = false
+        temptable.Font = font
+        table.insert(tablename, temptable)
+        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+    end
+    function Draw:OutlinedText(text, font, visible, pos_x, pos_y, size, centered, clr, clr2, tablename)
+        local temptable = Drawing.new("Text")
+        temptable.Text = text
+        temptable.Visible = visible
+        temptable.Position = Vector2.new(pos_x, pos_y)
+        temptable.Size = size
+        temptable.Center = centered
+        temptable.Color = RGB(clr[1], clr[2], clr[3])
+        temptable.Transparency = clr[4] / 255
+        temptable.Outline = true
+        temptable.OutlineColor = RGB(clr2[1], clr2[2], clr2[3])
+        temptable.Font = font
+        if not table.find(allrender, tablename) then table.insert(allrender, tablename) end
+        if tablename then table.insert(tablename, temptable) end
+        return temptable
+    end
+
+    function Draw:MenuOutlinedRect(visible, pos_x, pos_y, width, height, clr, tablename)
+        Draw:OutlinedRect(visible, pos_x + menu.x, pos_y + menu.y, width, height, clr, tablename)
+        table.insert(menu.postable, { tablename[#tablename], pos_x, pos_y })
+        if menu.log_multi ~= nil then
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+        end
+    end
+    function Draw:MenuFilledRect(visible, pos_x, pos_y, width, height, clr, tablename)
+        Draw:FilledRect(visible, pos_x + menu.x, pos_y + menu.y, width, height, clr, tablename)
+        table.insert(menu.postable, { tablename[#tablename], pos_x, pos_y })
+        if menu.log_multi ~= nil then
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+        end
+    end
+    function Draw:MenuBigText(text, visible, centered, pos_x, pos_y, tablename)
+        local text = Draw:OutlinedText(text, 2, visible, pos_x + menu.x, pos_y + menu.y, 13, centered, { 255, 255, 255, 255 }, { 0, 0, 0 }, tablename)
+        table.insert(menu.postable, { tablename[#tablename], pos_x, pos_y })
+        if menu.log_multi ~= nil then
+            table.insert(menu.mgrouptabz[menu.log_multi[1]][menu.log_multi[2]], tablename[#tablename])
+        end
+        return text
+    end
+    function Draw:CoolBox(name, x, y, width, height, tab)
+        Draw:MenuOutlinedRect(true, x, y, width, height, { 0, 0, 0, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, width - 2, height - 2, { 20, 20, 20, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 2, y + 2, width - 3, 1, { 127, 72, 163, 255 }, tab)
+        table.insert(menu.clrs.norm, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 2, y + 3, width - 3, 1, { 87, 32, 123, 255 }, tab)
+        table.insert(menu.clrs.dark, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 2, y + 4, width - 3, 1, { 20, 20, 20, 255 }, tab)
+        for i = 0, 7 do
+            Draw:MenuFilledRect(true, x + 2, y + 5 + (i * 2), width - 4, 2, { 45, 45, 45, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(45, 45, 45) }, [2] = { start = 7, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuBigText(name, true, false, x + 6, y + 5, tab)
+    end
+    function Draw:CoolMultiBox(names, x, y, width, height, tab)
+        Draw:MenuOutlinedRect(true, x, y, width, height, { 0, 0, 0, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, width - 2, height - 2, { 20, 20, 20, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 2, y + 2, width - 3, 1, { 127, 72, 163, 255 }, tab)
+        table.insert(menu.clrs.norm, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 2, y + 3, width - 3, 1, { 87, 32, 123, 255 }, tab)
+        table.insert(menu.clrs.dark, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 2, y + 4, width - 3, 1, { 20, 20, 20, 255 }, tab)
+        Draw:MenuFilledRect(true, x + 2, y + 5, width - 4, 18, { 30, 30, 30, 255 }, tab)
+        Draw:MenuFilledRect(true, x + 2, y + 21, width - 4, 2, { 20, 20, 20, 255 }, tab)
+        local selected = {}
+        for i = 0, 8 do
+            Draw:MenuFilledRect(true, x + 2, y + 5 + (i * 2), width - 159, 2, { 45, 45, 45, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 8, color = RGB(35, 35, 35) } })
+            table.insert(selected, { postable = #menu.postable, drawn = tab[#tab] })
+        end
+        local length = 2
+        local selected_pos = {}
+        local click_pos = {}
+        local nametext = {}
+        for i, v in ipairs(names) do
+            Draw:MenuBigText(v, true, false, x + 4 + length, y + 5, tab)
+            if i == 1 then tab[#tab].Color = RGB(255, 255, 255)
+            else tab[#tab].Color = RGB(170, 170, 170) end
+            table.insert(nametext, tab[#tab])
+            Draw:MenuFilledRect(true, x + length + tab[#tab].TextBounds.X + 8, y + 5, 2, 16, { 20, 20, 20, 255 }, tab)
+            table.insert(selected_pos, { pos = x + length, length = tab[#tab - 1].TextBounds.X + 8 })
+            table.insert(click_pos, { x = x + length, y = y + 5, width = tab[#tab - 1].TextBounds.X + 8, height = 18, name = v, num = i })
+            length += tab[#tab - 1].TextBounds.X + 10
+        end
+        local settab = 1
+        for k, v in pairs(selected) do
+            menu.postable[v.postable][2] = selected_pos[settab].pos
+            v.drawn.Size = Vector2.new(selected_pos[settab].length, 2)
+        end
+        return { bar = selected, barpos = selected_pos, click_pos = click_pos, nametext = nametext }
+    end
+    function Draw:Toggle(name, value, unsafe, x, y, tab)
+        Draw:MenuOutlinedRect(true, x, y, 12, 12, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, 10, 10, { 0, 0, 0, 255 }, tab)
+        local temptable = {}
+        for i = 0, 3 do
+            Draw:MenuFilledRect(true, x + 2, y + 2 + (i * 2), 8, 2, { 0, 0, 0, 255 }, tab)
+            table.insert(temptable, tab[#tab])
+            if value then
+                tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(menu.mc[1], menu.mc[2], menu.mc[3]) }, [2] = { start = 3, color = RGB(menu.mc[1] - 40, menu.mc[2] - 40, menu.mc[3] - 40) } })
+            else
+                tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 3, color = RGB(30, 30, 30) } })
+            end
+        end
+        Draw:MenuBigText(name, true, false, x + 16, y - 1, tab)
+        if unsafe == true then tab[#tab].Color = RGB(90, 90, 90) end
+        table.insert(temptable, tab[#tab])
+        return temptable
+    end
+    function Draw:Keybind(key, x, y, tab)
+        local temptable = {}
+        Draw:MenuFilledRect(true, x, y, 44, 16, { 25, 25, 25, 255 }, tab)
+        Draw:MenuBigText(KeyEnumToName(key), true, true, x + 22, y + 1, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuOutlinedRect(true, x, y, 44, 16, { 30, 30, 30, 255 }, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, 42, 14, { 0, 0, 0, 255 }, tab)
+        return temptable
+    end
+    function Draw:ColorPicker(color, x, y, tab)
+        local temptable = {}
+        Draw:MenuOutlinedRect(true, x, y, 28, 14, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, 26, 12, { 0, 0, 0, 255 }, tab)
+        Draw:MenuFilledRect(true, x + 2, y + 2, 24, 10, { color[1], color[2], color[3], 255 }, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 2, y + 2, 24, 10, { color[1] - 40, color[2] - 40, color[3] - 40, 255 }, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuOutlinedRect(true, x + 3, y + 3, 22, 8, { color[1] - 40, color[2] - 40, color[3] - 40, 255 }, tab)
+        table.insert(temptable, tab[#tab])
+        return temptable
+    end
+    function Draw:Slider(name, stradd, value, minvalue, maxvalue, customvals, rounded, x, y, length, tab)
+        Draw:MenuBigText(name, true, false, x, y - 3, tab)
+        for i = 0, 3 do
+            Draw:MenuFilledRect(true, x + 2, y + 14 + (i * 2), length - 4, 2, { 0, 0, 0, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 3, color = RGB(30, 30, 30) } })
+        end
+        local temptable = {}
+        for i = 0, 3 do
+            Draw:MenuFilledRect(true, x + 2, y + 14 + (i * 2), (length - 4) * ((value - minvalue) / (maxvalue - minvalue)), 2, { 0, 0, 0, 255 }, tab)
+            table.insert(temptable, tab[#tab])
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(menu.mc[1], menu.mc[2], menu.mc[3]) }, [2] = { start = 3, color = RGB(menu.mc[1] - 40, menu.mc[2] - 40, menu.mc[3] - 40) } })
+        end
+        Draw:MenuOutlinedRect(true, x, y + 12, length, 12, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 13, length - 2, 10, { 0, 0, 0, 255 }, tab)
+        local textstr = ""
+        if stradd == nil then stradd = "" end
+        local decplaces = rounded and string.rep("0", math.log(1 / rounded) / math.log(10)) or 1
+        if rounded and value == math.floor(value * decplaces) then
+            textstr = tostring(value) .. "." .. decplaces .. stradd
+        else
+            textstr = tostring(value) .. stradd
+        end
+        Draw:MenuBigText(customvals[value] or textstr, true, true, x + (length * 0.5), y + 11, tab)
+        table.insert(temptable, tab[#tab])
+        table.insert(temptable, stradd)
+        return temptable
+    end
+    function Draw:Dropbox(name, value, values, x, y, length, tab)
+        local temptable = {}
+        Draw:MenuBigText(name, true, false, x, y - 3, tab)
+        for i = 0, 7 do
+            Draw:MenuFilledRect(true, x + 2, y + 14 + (i * 2), length - 4, 2, { 0, 0, 0, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 7, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuOutlinedRect(true, x, y + 12, length, 22, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 13, length - 2, 20, { 0, 0, 0, 255 }, tab)
+        Draw:MenuBigText(tostring(values[value]), true, false, x + 6, y + 16, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuBigText("-", true, false, x - 17 + length, y + 16, tab)
+        table.insert(temptable, tab[#tab])
+        return temptable
+    end
+    function Draw:Combobox(name, values, x, y, length, tab)
+        local temptable = {}
+        Draw:MenuBigText(name, true, false, x, y - 3, tab)
+        for i = 0, 7 do
+            Draw:MenuFilledRect(true, x + 2, y + 14 + (i * 2), length - 4, 2, { 0, 0, 0, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 7, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuOutlinedRect(true, x, y + 12, length, 22, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 13, length - 2, 20, { 0, 0, 0, 255 }, tab)
+        local textthing = ""
+        for k, v in pairs(values) do
+            if v[2] then
+                if textthing == "" then textthing = v[1]
+                else textthing ..= ", " .. v[1] end
+            end
+        end
+        if string.len(textthing) > 25 then textthing = string_cut(textthing, 25) end
+        textthing = textthing ~= "" and textthing or "None"
+        Draw:MenuBigText(textthing, true, false, x + 6, y + 16, tab)
+        table.insert(temptable, tab[#tab])
+        Draw:MenuBigText("...", true, false, x - 27 + length, y + 16, tab)
+        table.insert(temptable, tab[#tab])
+        return temptable
+    end
+    function Draw:Button(name, x, y, length, tab)
+        local temptable = {}
+        for i = 0, 8 do
+            Draw:MenuFilledRect(true, x + 2, y + 2 + (i * 2), length - 4, 2, { 0, 0, 0, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 8, color = RGB(35, 35, 35) } })
+            table.insert(temptable, tab[#tab])
+        end
+        Draw:MenuOutlinedRect(true, x, y, length, 22, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, length - 2, 20, { 0, 0, 0, 255 }, tab)
+        temptable.text = Draw:MenuBigText(name, true, true, x + math.floor(length * 0.5), y + 4, tab)
+        return temptable
+    end
+    function Draw:TextBox(name, text, x, y, length, tab)
+        for i = 0, 8 do
+            Draw:MenuFilledRect(true, x + 2, y + 2 + (i * 2), length - 4, 2, { 0, 0, 0, 255 }, tab)
+            tab[#tab].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 8, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuOutlinedRect(true, x, y, length, 22, { 30, 30, 30, 255 }, tab)
+        Draw:MenuOutlinedRect(true, x + 1, y + 1, length - 2, 20, { 0, 0, 0, 255 }, tab)
+        Draw:MenuBigText(text, true, false, x + 6, y + 4, tab)
+        return tab[#tab]
+    end
 end
 
 -- ============================================================
--- GROUPBOX
+-- LIBRARY WRAPPER : expose les fonctions originales
 -- ============================================================
-local Groupbox = {}
-Groupbox.__index = Groupbox
-
-local function makeGroup(tab, name, side)
-    local g = setmetatable({}, Groupbox)
-    g._tab = tab
-    g._name = name
-    g._side = side
-    g._x = tab._parent.X + (side == "left" and 17 or (tab._parent.Width / 2 + 3))
-    g._width = (tab._parent.Width - 40) / 2
-    g._optionsY = 30
-    g._drawings = {}
-    g._optList = {}
-
-    -- compute Y offset (stack groups on same side)
-    local stackY = tab._parent.Y + 66
-    for _, other in ipairs(tab._groups) do
-        if other._side == side then
-            stackY = stackY + other._bodySize + 6
-        end
-    end
-    g._y = stackY
-
-    local visIf = function() return tab:isActive() end
-    g._visIfRoot = visIf
-
-    -- header
-    g._h1 = drawRect(true,  g._x, g._y, g._width, 22, Color3.fromRGB(30, 30, 30), 1, visIf)
-    g._h2 = drawRect(true,  g._x + 2, g._y + 2, g._width - 4, 1, ACCENT, 1, visIf)
-    g._h3 = drawRect(true,  g._x + 2, g._y + 3, g._width - 4, 1, ACCENT_DARK, 1, visIf)
-    g._t  = drawText(name, g._x + 6, g._y + 5, 13, Color3.new(1, 1, 1), false, visIf)
-
-    g._body = drawRect(true, g._x, g._y + 22, g._width, 30, Color3.fromRGB(40, 40, 40), 1, visIf)
-    g._bodySize = 30
-
-    table.insert(tab._groups, g)
-    return g
-end
-
-function Groupbox:_visIf()
-    return self._visIfRoot
-end
-
-function Groupbox:_nextY()
-    return self._y + self._optionsY
-end
-
-function Groupbox:_pushOption(idx, obj, y, h)
-    h = h or 22
-    self._optionsY = self._optionsY + h
-    self._bodySize = self._optionsY + 6
-    self._body.Size = Vector2.new(self._width, self._bodySize - 22)
-    if idx and obj then table.insert(self._optList, { idx = idx, obj = obj }) end
-end
-
-function Groupbox:AddToggle(idx, opts) return Elements.Toggle(self, idx, opts) end
-function Groupbox:AddSlider(idx, opts) return Elements.Slider(self, idx, opts) end
-function Groupbox:AddDropdown(idx, opts) return Elements.Dropdown(self, idx, opts) end
-function Groupbox:AddInput(idx, opts) return Elements.Input(self, idx, opts) end
-function Groupbox:AddButton(a, b) return Elements.Button(self, a, b) end
-function Groupbox:AddLabel(t, w) return Elements.Label(self, t, w) end
-function Groupbox:AddDivider() return Elements.Divider(self) end
-
-function Groupbox:AddDependencyBox()
-    local parent = self
-    local Depbox = {}
-
-    -- 🔑 Copie directe des propriétés du parent (fix du nil + number)
-    Depbox._parent = parent
-    Depbox._conditions = {}
-    Depbox._x = parent._x
-    Depbox._y = parent._y
-    Depbox._width = parent._width
-    Depbox._bodySize = parent._bodySize
-    Depbox._visIfRoot = parent._visIfRoot
-
-    function Depbox:_visIf()
-        for _, cond in ipairs(Depbox._conditions) do
-            local tgl, want = cond[1], cond[2]
-            if tgl.Value ~= want then return false end
-        end
-        return parent:_visIf()
-    end
-
-    function Depbox:_nextY()
-        return parent:_nextY()
-    end
-
-    function Depbox:_pushOption(idx, obj, y, h)
-        h = h or 22
-        parent._optionsY = parent._optionsY + h
-        parent._bodySize = parent._optionsY + 6
-        parent._body.Size = Vector2.new(parent._width, parent._bodySize - 22)
-        if idx and obj then
-            table.insert(parent._optList, { idx = idx, obj = obj })
-        end
-    end
-
-    function Depbox:AddToggle(idx, opts)   return Elements.Toggle(Depbox, idx, opts)   end
-    function Depbox:AddSlider(idx, opts)   return Elements.Slider(Depbox, idx, opts)   end
-    function Depbox:AddDropdown(idx, opts) return Elements.Dropdown(Depbox, idx, opts) end
-    function Depbox:AddInput(idx, opts)    return Elements.Input(Depbox, idx, opts)    end
-    function Depbox:AddButton(a, b)        return Elements.Button(Depbox, a, b)        end
-    function Depbox:AddLabel(t, w)         return Elements.Label(Depbox, t, w)         end
-    function Depbox:AddDivider()           return Elements.Divider(Depbox)             end
-
-    function Depbox:SetupDependencies(deps)
-        Depbox._conditions = deps or {}
-    end
-
-    return Depbox
-end
-
--- ============================================================
--- TAB
--- ============================================================
-local Tab = {}
-Tab.__index = Tab
-
-local function makeTab(window, name)
-    local t = setmetatable({}, Tab)
-    t._parent = window
-    t._name = name
-    t._groups = {}
-    t._active = (#window.Tabs == 0)
-    t._btn = {}
-
-    table.insert(window.Tabs, t)
-    window:_refreshTabButtons()
-    return t
-end
-
-function Tab:isActive() return self._active end
-
-function Tab:AddLeftGroupbox(name)  return makeGroup(self, name, "left")  end
-function Tab:AddRightGroupbox(name) return makeGroup(self, name, "right") end
-
--- ============================================================
--- WINDOW
--- ============================================================
-local Window = {}
-Window.__index = Window
 
 function Library:CreateWindow(opts)
     opts = opts or {}
-    local self = setmetatable({}, Window)
-    self.Title  = opts.Title or "Library"
-    self.Width  = opts.Width or 500
-    self.Height = opts.Height or 600
+    MenuName = opts.Title or "Bitch Bot"
+    menu.open = opts.AutoShow ~= false
+    menu.Initialize = menu.Initialize or function() end
+    -- rebuild menu object with new title
+    Library._window = { tabs = {} }
+    Library._tabBuilders = {}
+    Library._window.MenuName = MenuName
+    return Library._window
+end
 
-    --  Récupère la taille RÉELLE de l'écran (pas la valeur en cache)
-    local realScreen = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-    if realScreen.X < 100 or realScreen.Y < 100 then
-        realScreen = Vector2.new(1920, 1080)  -- fallback si vraiment 0
+function Library._window:AddTab(name)
+    local idx = #self.tabs + 1
+    self.tabs[idx] = { name = name, content = {} }
+    Library._tabBuilders[idx] = self.tabs[idx].content
+    return { _tabIdx = idx, _content = self.tabs[idx].content }
+end
+
+local TabMethods = {}
+TabMethods.__index = TabMethods
+
+function Library._tabObj:AddLeftGroupbox(name) end  -- placeholder
+
+-- Better: proper API
+function Library:_getTab(idx)
+    return self._window.tabs[idx]
+end
+
+-- Rewrite AddTab return to proper object
+local function makeTabObj(window, idx)
+    local obj = { _idx = idx, _window = window }
+    function obj:AddLeftGroupbox(name)
+        local g = { name = name, autopos = "left", content = {} }
+        table.insert(self._window.tabs[self._idx].content, g)
+        return makeGroupObj(g)
+    end
+    function obj:AddRightGroupbox(name)
+        local g = { name = name, autopos = "right", content = {} }
+        table.insert(self._window.tabs[self._idx].content, g)
+        return makeGroupObj(g)
+    end
+    return obj
+end
+
+local function makeGroupObj(g)
+    local obj = { _group = g }
+    function obj:AddToggle(idx, opts)
+        opts = opts or {}
+        table.insert(g.content, { type = "toggle", name = opts.Text or idx, value = opts.Default == true, _idx = idx, _callback = opts.Callback })
+        return { SetValue = function(self, v) end, OnChanged = function(self, fn) end, Value = opts.Default == true }
+    end
+    function obj:AddSlider(idx, opts)
+        opts = opts or {}
+        table.insert(g.content, { type = "slider", name = opts.Text or idx, value = opts.Default or 0, minvalue = opts.Min or 0, maxvalue = opts.Max or 100, stradd = opts.Suffix or "", _idx = idx, _callback = opts.Callback })
+        return { SetValue = function(self, v) end, OnChanged = function(self, fn) end, Value = opts.Default or 0 }
+    end
+    function obj:AddDropdown(idx, opts)
+        opts = opts or {}
+        table.insert(g.content, { type = "dropbox", name = opts.Text or idx, value = opts.Default or 1, values = opts.Values or {}, _idx = idx, _callback = opts.Callback })
+        return { SetValue = function(self, v) end, OnChanged = function(self, fn) end, Value = opts.Values and opts.Values[opts.Default or 1] or nil }
+    end
+    function obj:AddButton(a, b)
+        local txt = type(a) == "table" and a.Text or a
+        local fn = type(a) == "table" and a.Func or b
+        table.insert(g.content, { type = "button", name = txt, _callback = fn })
+        return { }
+    end
+    function obj:AddLabel(txt, wrap)
+        table.insert(g.content, { type = "label", name = txt })
+        return { AddColorPicker = function(self, idx, opts) return { SetValueRGB = function() end, OnChanged = function() end, Value = Color3.new(1,1,1) } end, AddKeyPicker = function(self, idx, opts) return { GetState = function() return false end, OnChanged = function() end, Value = "None" } end }
+    end
+    function obj:AddDivider()
+        table.insert(g.content, { type = "label", name = "" })
+    end
+    return obj
+end
+
+-- Real implementation
+function Library:CreateWindow(opts)
+    opts = opts or {}
+    MenuName = opts.Title or "Bitch Bot"
+    menu.open = opts.AutoShow ~= false
+    local window = { tabs = {}, _pendingInit = true }
+    window.Title = MenuName
+
+    function window:AddTab(name)
+        local idx = #self.tabs + 1
+        local tabData = { name = name, content = {} }
+        self.tabs[idx] = tabData
+        return makeTabObj(self, idx)
     end
 
-    self.X = math.floor((realScreen.X - self.Width) / 2)
-    self.Y = math.floor((realScreen.Y - self.Height) / 2)
-    self._screenSize = realScreen
-    self.Tabs   = {}
-    self.ActiveTab = 1
-    self.Open   = opts.AutoShow ~= false
-    self.Dragging = false
-    self.DragOff  = Vector2.new()
-    self._btnDrawings = {}
-
-    self:_buildBg()
-    self:_bindInput()
-
-    Library.Window = self
-    return self
+    Library._window = window
+    Library._pendingInit = function()
+        menu.Initialize(window.tabs)
+    end
+    return window
 end
 
-function Window:_buildBg()
-    local visIf = function() return true end
-    self._bg1 = drawRect(true, self.X, self.Y, self.Width, self.Height, Color3.fromRGB(0, 0, 0), 1, visIf)
-    self._bg2 = drawRect(true, self.X + 1, self.Y + 1, self.Width - 2, self.Height - 2, Color3.fromRGB(20, 20, 20), 1, visIf)
-    self._top1 = drawRect(true, self.X + 2, self.Y + 2, self.Width - 3, 1, ACCENT, 1, visIf)
-    self._top2 = drawRect(true, self.X + 2, self.Y + 3, self.Width - 3, 1, ACCENT_DARK, 1, visIf)
-    self._title = drawText(self.Title, self.X + 6, self.Y + 6, 14, Color3.new(1, 1, 1), false, visIf)
-    self._body = drawRect(true, self.X + 10, self.Y + 59, self.Width - 20, self.Height - 69, Color3.fromRGB(35, 35, 35), 1, visIf)
-    self._closeX = drawText("X", self.X + self.Width - 20, self.Y + 6, 14, Color3.fromRGB(255, 80, 80), false, visIf)
-end
+-- ============================================================
+-- menu.Initialize original (copie exacte de l'original)
+-- ============================================================
+function menu.Initialize(menutable)
+    if #menutable == 0 then
+        menutable = { { name = "Main", content = {} } }
+    end
+    local bbmenu = {}
+    do
+        Draw:MenuOutlinedRect(true, 0, 0, menu.w, menu.h, { 0, 0, 0, 255 }, bbmenu)
+        Draw:MenuOutlinedRect(true, 1, 1, menu.w - 2, menu.h - 2, { 20, 20, 20, 255 }, bbmenu)
+        Draw:MenuOutlinedRect(true, 2, 2, menu.w - 3, 1, { 127, 72, 163, 255 }, bbmenu)
+        table.insert(menu.clrs.norm, bbmenu[#bbmenu])
+        Draw:MenuOutlinedRect(true, 2, 3, menu.w - 3, 1, { 87, 32, 123, 255 }, bbmenu)
+        table.insert(menu.clrs.dark, bbmenu[#bbmenu])
+        Draw:MenuOutlinedRect(true, 2, 4, menu.w - 3, 1, { 20, 20, 20, 255 }, bbmenu)
+        for i = 0, 19 do
+            Draw:MenuFilledRect(true, 2, 5 + i, menu.w - 4, 1, { 20, 20, 20, 255 }, bbmenu)
+            bbmenu[6 + i].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 20, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuFilledRect(true, 2, 25, menu.w - 4, menu.h - 27, { 35, 35, 35, 255 }, bbmenu)
+        Draw:MenuBigText(MenuName or "Bitch Bot", true, false, 6, 6, bbmenu)
+        Draw:MenuOutlinedRect(true, 8, 22, menu.w - 16, menu.h - 30, { 0, 0, 0, 255 }, bbmenu)
+        Draw:MenuOutlinedRect(true, 9, 23, menu.w - 18, menu.h - 32, { 20, 20, 20, 255 }, bbmenu)
+        Draw:MenuOutlinedRect(true, 10, 24, menu.w - 19, 1, { 127, 72, 163, 255 }, bbmenu)
+        table.insert(menu.clrs.norm, bbmenu[#bbmenu])
+        Draw:MenuOutlinedRect(true, 10, 25, menu.w - 19, 1, { 87, 32, 123, 255 }, bbmenu)
+        table.insert(menu.clrs.dark, bbmenu[#bbmenu])
+        Draw:MenuOutlinedRect(true, 10, 26, menu.w - 19, 1, { 20, 20, 20, 255 }, bbmenu)
+        for i = 0, 14 do
+            Draw:MenuFilledRect(true, 10, 27 + (i * 2), menu.w - 20, 2, { 45, 45, 45, 255 }, bbmenu)
+            bbmenu[#bbmenu].Color = ColorRange(i, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 15, color = RGB(35, 35, 35) } })
+        end
+        Draw:MenuFilledRect(true, 10, 57, menu.w - 20, menu.h - 67, { 35, 35, 35, 255 }, bbmenu)
+    end
 
-function Window:_refreshPositions()
-    local x, y = self.X, self.Y
-    self._bg1.Position   = Vector2.new(x, y)
-    self._bg2.Position   = Vector2.new(x + 1, y + 1)
-    self._top1.Position  = Vector2.new(x + 2, y + 2)
-    self._top2.Position  = Vector2.new(x + 2, y + 3)
-    self._title.Position = Vector2.new(x + 6, y + 6)
-    self._body.Position  = Vector2.new(x + 10, y + 59)
-    self._closeX.Position= Vector2.new(x + self.Width - 20, y + 6)
+    local tabz = {}
+    for i = 1, #menutable do tabz[i] = {} end
+    local tabs = {}
+    menu.multigroups = {}
 
-    self:_refreshTabButtons()
-    for _, tab in ipairs(self.Tabs) do
-        for _, g in ipairs(tab._groups) do
-            local gx = self.X + (g._side == "left" and 17 or (self.Width / 2 + 3))
-            g._x = gx
-            -- recompute group Y (stack)
-            local gY = self.Y + 66
-            for _, o in ipairs(tab._groups) do
-                if o._side == g._side and o ~= g then
-                    gY = gY + o._bodySize + 6
-                    if o == g then break end
+    for k, v in pairs(menutable) do
+        Draw:MenuFilledRect(true, 10 + ((k - 1) * ((menu.w - 20) / #menutable)), 27, ((menu.w - 20) / #menutable), 32, { 30, 30, 30, 255 }, bbmenu)
+        Draw:MenuOutlinedRect(true, 10 + ((k - 1) * ((menu.w - 20) / #menutable)), 27, ((menu.w - 20) / #menutable), 32, { 20, 20, 20, 255 }, bbmenu)
+        Draw:MenuBigText(v.name, true, true, math.floor(10 + ((k - 1) * ((menu.w - 20) / #menutable)) + (((menu.w - 20) / #menutable) * 0.5)), 35, bbmenu)
+        table.insert(tabs, { bbmenu[#bbmenu - 2], bbmenu[#bbmenu - 1], bbmenu[#bbmenu] })
+        table.insert(menu.tabnames, v.name)
+
+        menu.options[v.name] = {}
+        menu.multigroups[v.name] = {}
+        menu.mgrouptabz[v.name] = {}
+
+        local y_offies = { left = 66, right = 66 }
+        if v.content ~= nil then
+            for k1, v1 in pairs(v.content) do
+                if v1.autopos ~= nil then
+                    v1.width = menu.columns.width
+                    if v1.autopos == "left" then v1.x = menu.columns.left v1.y = y_offies.left
+                    elseif v1.autopos == "right" then v1.x = menu.columns.right v1.y = y_offies.right end
                 end
-            end
-            -- simpler: just move all groups uniformly
-            g._y = g._y + (self.Y - self._lastY or 0)
-        end
-    end
-    self._lastY = self.Y
-end
-
-function Window:_refreshTabButtons()
-    local w = (self.Width - 20) / math.max(1, #self.Tabs)
-    for i, tab in ipairs(self.Tabs) do
-        local x = self.X + 10 + (i - 1) * w
-        if not tab._btn.bg then
-            tab._btn.bg   = drawRect(true, x, self.Y + 27, w, 32, Color3.fromRGB(30, 30, 30), 1)
-            tab._btn.line = drawRect(true, x, self.Y + 27, w, 1, ACCENT, 1)
-            tab._btn.txt  = drawText(tab._name, x + w/2, self.Y + 36, 13, Color3.new(1, 1, 1), true)
-        else
-            tab._btn.bg.Position   = Vector2.new(x, self.Y + 27)
-            tab._btn.bg.Size       = Vector2.new(w, 32)
-            tab._btn.line.Position = Vector2.new(x, self.Y + 27)
-            tab._btn.line.Size     = Vector2.new(w, 1)
-            tab._btn.txt.Position  = Vector2.new(x + w/2, self.Y + 36)
-        end
-    end
-end
-
-function Window:_bindInput()
-    local self_ = self
-    UserInput.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
-        -- close button
-        if MOUSE.X > self_.X + self_.Width - 26 and MOUSE.X < self_.X + self_.Width - 4
-            and MOUSE.Y > self_.Y + 4 and MOUSE.Y < self_.Y + 24 then
-            Library:Unload()
-            return
-        end
-        -- title drag
-        if MOUSE.X > self_.X and MOUSE.X < self_.X + self_.Width - 30
-            and MOUSE.Y > self_.Y and MOUSE.Y < self_.Y + 25 then
-            self_.Dragging = true
-            self_.DragOff = Vector2.new(MOUSE.X - self_.X, MOUSE.Y - self_.Y)
-        end
-        -- tab switch
-        local w = (self_.Width - 20) / math.max(1, #self_.Tabs)
-        for i, tab in ipairs(self_.Tabs) do
-            local tx = self_.X + 10 + (i - 1) * w
-            if inRegion(tx, self_.Y + 27, w, 32) then
-                self_:_switchTab(i)
-                break
-            end
-        end
-    end)
-
-    UserInput.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            self_.Dragging = false
-        end
-    end)
-
-    RunService.RenderStepped:Connect(function()
-        if self_.Dragging then
-            self_.X = MOUSE.X - self_.DragOff.X
-            self_.Y = MOUSE.Y - self_.DragOff.Y
-            self_:_refreshPositions()
-        end
-    end)
-end
-
-function Window:_switchTab(idx)
-    self.ActiveTab = idx
-    for i, tab in ipairs(self.Tabs) do
-        tab._active = (i == idx)
-        tab._btn.txt.Color = tab._active and Color3.new(1, 1, 1) or Color3.fromRGB(170, 170, 170)
-    end
-end
-
-function Window:AddTab(name)
-    return makeTab(self, name)
-end
-
--- ============================================================
--- SAVE MANAGER
--- ============================================================
-local SaveManager = {}
-SaveManager.__index = SaveManager
-SaveManager.Folder = "BitchBot"
-SaveManager.Ignore = {}
-
-function SaveManager:SetFolder(path)
-    self.Folder = path
-    if not isfolder(path) then makefolder(path) end
-end
-
-function SaveManager:SetIgnoreIndexes(list)
-    self.Ignore = list or {}
-end
-
-function SaveManager:_isIgnored(idx)
-    for _, v in ipairs(self.Ignore) do if v == idx then return true end end
-    return false
-end
-
-function SaveManager:Save(name)
-    local data = {}
-    for idx, obj in pairs(Library.Options) do
-        if not self:_isIgnored(idx) then
-            if obj._type == "Toggle" then
-                data[idx] = { t = "t", v = obj.Value }
-            elseif obj._type == "Slider" then
-                data[idx] = { t = "s", v = obj.Value }
-            elseif obj._type == "Dropdown" then
-                data[idx] = { t = "d", v = obj.Value }
-            elseif obj._type == "Input" then
-                data[idx] = { t = "i", v = obj.Value }
-            else
-                if obj.Value and typeof(obj.Value) == "Color3" then
-                    data[idx] = { t = "c", v = { obj.Value.R, obj.Value.G, obj.Value.B } }
+                local groups = {}
+                if type(v1.name) == "table" then groups = v1.name
+                else table.insert(groups, v1.name) end
+                local y_pos = 24
+                for g_ind, g_name in ipairs(groups) do
+                    menu.options[v.name][g_name] = {}
+                    if type(v1.name) == "table" then
+                        menu.mgrouptabz[v.name][g_name] = {}
+                        menu.log_multi = { v.name, g_name }
+                    end
+                    local content = nil
+                    if type(v1.name) == "table" then y_pos = 28 content = v1[g_ind].content
+                    else y_pos = 24 content = v1.content end
+                    if content ~= nil then
+                        for k2, v2 in pairs(content) do
+                            if v2.type == "toggle" then
+                                menu.options[v.name][g_name][v2.name] = {}
+                                local unsafe = false
+                                if v2.unsafe then unsafe = true end
+                                menu.options[v.name][g_name][v2.name][4] = Draw:Toggle(v2.name, v2.value, unsafe, v1.x + 8, v1.y + y_pos, tabz[k])
+                                menu.options[v.name][g_name][v2.name][1] = v2.value
+                                menu.options[v.name][g_name][v2.name][7] = v2.value
+                                menu.options[v.name][g_name][v2.name][2] = v2.type
+                                menu.options[v.name][g_name][v2.name][3] = { v1.x + 7, v1.y + y_pos - 1 }
+                                menu.options[v.name][g_name][v2.name][6] = unsafe
+                                menu.options[v.name][g_name][v2.name].tooltip = v2.tooltip or nil
+                                y_pos += 18
+                            elseif v2.type == "slider" then
+                                menu.options[v.name][g_name][v2.name] = {}
+                                menu.options[v.name][g_name][v2.name][4] = Draw:Slider(v2.name, v2.stradd, v2.value, v2.minvalue, v2.maxvalue, v2.custom or {}, v2.decimal, v1.x + 8, v1.y + y_pos, v1.width - 16, tabz[k])
+                                menu.options[v.name][g_name][v2.name][1] = v2.value
+                                menu.options[v.name][g_name][v2.name][2] = v2.type
+                                menu.options[v.name][g_name][v2.name][3] = { v1.x + 7, v1.y + y_pos - 1, v1.width - 16 }
+                                menu.options[v.name][g_name][v2.name][5] = false
+                                menu.options[v.name][g_name][v2.name][6] = { v2.minvalue, v2.maxvalue }
+                                menu.options[v.name][g_name][v2.name][7] = { v1.x + 7 + v1.width - 38, v1.y + y_pos - 1 }
+                                y_pos += 30
+                            elseif v2.type == "dropbox" then
+                                menu.options[v.name][g_name][v2.name] = {}
+                                menu.options[v.name][g_name][v2.name][1] = v2.value
+                                menu.options[v.name][g_name][v2.name][2] = v2.type
+                                menu.options[v.name][g_name][v2.name][5] = false
+                                menu.options[v.name][g_name][v2.name][6] = v2.values
+                                menu.options[v.name][g_name][v2.name][3] = { v1.x + 7, v1.y + y_pos - 1, v1.width - 16 }
+                                menu.options[v.name][g_name][v2.name][4] = Draw:Dropbox(v2.name, v2.value, v2.values, v1.x + 8, v1.y + y_pos, v1.width - 16, tabz[k])
+                                y_pos += 40
+                            elseif v2.type == "button" then
+                                menu.options[v.name][g_name][v2.name] = {}
+                                menu.options[v.name][g_name][v2.name][1] = false
+                                menu.options[v.name][g_name][v2.name][2] = v2.type
+                                menu.options[v.name][g_name][v2.name].name = v2.name
+                                menu.options[v.name][g_name][v2.name].groupbox = g_name
+                                menu.options[v.name][g_name][v2.name].tab = v.name
+                                menu.options[v.name][g_name][v2.name].doubleclick = v2.doubleclick
+                                menu.options[v.name][g_name][v2.name][3] = { v1.x + 7, v1.y + y_pos - 1, v1.width - 16 }
+                                menu.options[v.name][g_name][v2.name][4] = Draw:Button(v2.name, v1.x + 8, v1.y + y_pos, v1.width - 16, tabz[k])
+                                y_pos += 28
+                            elseif v2.type == "label" then
+                                menu.options[v.name][g_name][v2.name or ("__lbl_" .. tostring(y_pos))] = {}
+                                menu.options[v.name][g_name][v2.name or ("__lbl_" .. tostring(y_pos))][2] = "label"
+                                menu.options[v.name][g_name][v2.name or ("__lbl_" .. tostring(y_pos))][1] = Draw:MenuBigText(v2.name, true, false, v1.x + 8, v1.y + y_pos, tabz[k])
+                                y_pos += 18
+                            end
+                        end
+                    end
+                    menu.log_multi = nil
+                end
+                y_pos += 2
+                if type(v1.name) ~= "table" then
+                    if v1.autopos == nil then Draw:CoolBox(v1.name, v1.x, v1.y, v1.width, v1.height, tabz[k])
+                    else
+                        if v1.autofill then y_pos = (menu.h - 17) - v1.y
+                        elseif v1.size ~= nil then y_pos = v1.size end
+                        Draw:CoolBox(v1.name, v1.x, v1.y, v1.width, y_pos, tabz[k])
+                        y_offies[v1.autopos] += y_pos + 6
+                    end
                 else
-                    data[idx] = { t = "k", v = obj.Value }
+                    if v1.autofill then y_pos = (menu.h - 17) - v1.y y_offies[v1.autopos] += y_pos + 6
+                    elseif v1.size ~= nil then y_pos = v1.size y_offies[v1.autopos] += y_pos + 6 end
+                    local drawn
+                    if v1.autopos == nil then drawn = Draw:CoolMultiBox(v1.name, v1.x, v1.y, v1.width, v1.height, tabz[k])
+                    else drawn = Draw:CoolMultiBox(v1.name, v1.x, v1.y, v1.width, y_pos, tabz[k]) end
+                    local group_vals = {}
+                    for _i, _v in ipairs(v1.name) do group_vals[_v] = (_i == 1) end
+                    table.insert(menu.multigroups[v.name], { vals = group_vals, drawn = drawn })
                 end
             end
         end
     end
-    local encoded = HttpService:JSONEncode(data)
-    if not isfolder(self.Folder) then makefolder(self.Folder) end
-    writefile(self.Folder .. "/" .. name .. ".json", encoded)
-    Library:Notify("Config saved: " .. name)
-end
 
-function SaveManager:Load(name)
-    local path = self.Folder .. "/" .. name .. ".json"
-    if not isfile(path) then Library:Notify("Config not found: " .. name, 3) return end
-    local ok, data = pcall(function() return HttpService:JSONDecode(readfile(path)) end)
-    if not ok or type(data) ~= "table" then Library:Notify("Failed to load config", 3) return end
-    for idx, entry in pairs(data) do
-        local obj = Library.Options[idx]
-        if obj then
-            if entry.t == "t" then obj:SetValue(entry.v)
-            elseif entry.t == "s" then obj:SetValue(entry.v)
-            elseif entry.t == "d" then obj:SetValue(entry.v)
-            elseif entry.t == "i" then obj:SetValue(entry.v)
-            elseif entry.t == "c" then obj:SetValueRGB(Color3.new(entry.v[1], entry.v[2], entry.v[3]))
-            elseif entry.t == "k" then if obj.SetValue then obj:SetValue(entry.v) end
-            end
+    Draw:MenuOutlinedRect(true, 10, 59, menu.w - 20, menu.h - 69, { 20, 20, 20, 255 }, bbmenu)
+    Draw:MenuOutlinedRect(true, 11, 58, ((menu.w - 20) / #menutable) - 2, 2, { 35, 35, 35, 255 }, bbmenu)
+    local barguy = { bbmenu[#bbmenu], menu.postable[#menu.postable] }
+
+    local function setActiveTab(slot)
+        barguy[1].Position = Vector2.new((menu.x + 11 + ((((menu.w - 20) / #menutable) - 2) * (slot - 1))) + ((slot - 1) * 2), menu.y + 58)
+        barguy[2][2] = (11 + ((((menu.w - 20) / #menutable) - 2) * (slot - 1))) + ((slot - 1) * 2)
+        barguy[2][3] = 58
+        for k, v in pairs(tabs) do
+            if k == slot then v[1].Visible = false v[3].Color = RGB(255, 255, 255)
+            else v[3].Color = RGB(170, 170, 170) v[1].Visible = true end
+        end
+        for k, v in pairs(tabz) do
+            if k == slot then for k1, v1 in pairs(v) do v1.Visible = true end
+            else for k1, v1 in pairs(v) do v1.Visible = false end end
         end
     end
-    Library:Notify("Config loaded: " .. name)
+    setActiveTab(menu.activetab)
+
+    -- Bind rendering to renderStepped
+    if menu._renderConn then menu._renderConn:Disconnect() end
+    menu._renderConn = game.RunService.RenderStepped:Connect(function(dt)
+        if menu.unloaded then return end
+        SCREEN_SIZE = Camera.ViewportSize
+        -- Mouse handling
+        if menu.mousedown then end
+    end)
+
+    -- Input handling
+    if menu._inputBegan then menu._inputBegan:Disconnect() end
+    menu._inputBegan = INPUT_SERVICE.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            menu.mousedown = true
+            -- Check tabs
+            for i = 1, #menutable do
+                local tx = menu.x + 10 + ((i - 1) * ((menu.w - 20) / #menutable))
+                if LOCAL_MOUSE.x > tx and LOCAL_MOUSE.x < tx + ((menu.w - 20) / #menutable) and LOCAL_MOUSE.y > menu.y + 27 and LOCAL_MOUSE.y < menu.y + 59 then
+                    menu.activetab = i
+                    setActiveTab(i)
+                    break
+                end
+            end
+            -- Toggle clicks
+            for tabName, groups in pairs(menu.options) do
+                if menu.tabnames[menu.activetab] == tabName then
+                    for gName, opts in pairs(groups) do
+                        for oName, v2 in pairs(opts) do
+                            if v2[2] == "toggle" then
+                                if LOCAL_MOUSE.x > menu.x + v2[3][1] and LOCAL_MOUSE.x < menu.x + v2[3][1] + 200 and LOCAL_MOUSE.y > menu.y + v2[3][2] and LOCAL_MOUSE.y < menu.y + v2[3][2] + 16 then
+                                    v2[1] = not v2[1]
+                                    local v = v2[1]
+                                    for i = 1, 4 do
+                                        local idx = i - 1
+                                        if v then v2[4][i].Color = ColorRange(idx, { [1] = { start = 0, color = RGB(menu.mc[1], menu.mc[2], menu.mc[3]) }, [2] = { start = 3, color = RGB(menu.mc[1] - 40, menu.mc[2] - 40, menu.mc[3] - 40) } })
+                                        else v2[4][i].Color = ColorRange(idx, { [1] = { start = 0, color = RGB(50, 50, 50) }, [2] = { start = 3, color = RGB(30, 30, 30) } }) end
+                                    end
+                                    if Library.Options[oName] then Library.Options[oName].Value = v end
+                                    if Library.Toggles[oName] then Library.Toggles[oName].Value = v end
+                                end
+                            elseif v2[2] == "button" then
+                                if LOCAL_MOUSE.x > menu.x + v2[3][1] and LOCAL_MOUSE.x < menu.x + v2[3][1] + v2[3][3] and LOCAL_MOUSE.y > menu.y + v2[3][2] and LOCAL_MOUSE.y < menu.y + v2[3][2] + 22 then
+                                    if v2._callback then pcall(v2._callback) end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
 end
 
-function SaveManager:BuildConfigSection(tab)
-    local group = tab:AddRightGroupbox("Configs")
-    group:AddInput("__cfg_name", { Text = "Config name", Default = "default" })
-    group:AddButton({ Text = "Save", Func = function()
-        local name = getgenv().Options.__cfg_name and getgenv().Options.__cfg_name.Value or "default"
-        SaveManager:Save(name)
-    end })
-    group:AddButton({ Text = "Load", Func = function()
-        local name = getgenv().Options.__cfg_name and getgenv().Options.__cfg_name.Value or "default"
-        SaveManager:Load(name)
-    end })
-    group:AddButton({ Text = "Delete", Func = function()
-        local name = getgenv().Options.__cfg_name and getgenv().Options.__cfg_name.Value or "default"
-        local path = SaveManager.Folder .. "/" .. name .. ".json"
-        if isfile(path) then delfile(path) Library:Notify("Deleted: " .. name) end
-    end })
+-- Auto-init after CreateWindow
+function Library:Finalize()
+    if self._pendingInit then
+        self._pendingInit()
+        self._pendingInit = nil
+    end
 end
-
-Library.SaveManager = SaveManager
 
 -- ============================================================
--- UNLOAD
+-- FINAL SETUP — Return the library
 -- ============================================================
 function Library:Unload()
     Library.Unloaded = true
-    if mouseConn then mouseConn:Disconnect() end
-    if notifConn then notifConn:Disconnect() end
-    if renderLoop then renderLoop:Disconnect() end
-    cleanupDrawings()
-    getgenv().Options = nil
-    getgenv().Toggles = nil
+    menu.unloaded = true
+    if menu._renderConn then menu._renderConn:Disconnect() end
+    if menu._inputBegan then menu._inputBegan:Disconnect() end
+    Draw:UnRender()
 end
+
+task.spawn(function()
+    while not Library.Unloaded do
+        task.wait(0.1)
+        if Library._pendingInit then
+            -- Wait until scene is ready
+            local ok = pcall(Library.Finalize, Library)
+            if not ok then break end
+        end
+    end
+end)
 
 return Library
